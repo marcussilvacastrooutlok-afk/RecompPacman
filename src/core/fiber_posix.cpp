@@ -10,9 +10,6 @@
  */
 
 #if defined(__APPLE__) && !defined(_XOPEN_SOURCE)
-// Darwin hides the deprecated ucontext API unless a POSIX/XSI feature level
-// is requested before <ucontext.h> is included. fiber.h includes ucontext.h,
-// so the feature macro must be set in this translation unit first.
 #define _XOPEN_SOURCE 700
 #endif
 
@@ -20,8 +17,154 @@
 #if REX_PLATFORM_LINUX || REX_PLATFORM_MAC
 
 #include <rex/thread/fiber.h>
-
 #include <cassert>
+
+#if defined(__ANDROID__)
+
+// ============================================================================
+// ANDROID EMULATION BACKEND (Fibers over Threads)
+// O Android NDK removeu as funções POSIX ucontext (getcontext, makecontext)
+// por questões de segurança. Esta é uma implementação substituta baseada em std::thread.
+// ============================================================================
+
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+#include <unordered_map>
+
+namespace rex::thread {
+
+struct AndroidFiberState {
+  std::mutex mtx;
+  std::condition_variable cv;
+  bool running = false;
+  bool terminating = false;
+  std::thread os_thread;
+};
+
+static std::unordered_map<Fiber*, AndroidFiberState*> s_fiber_states;
+static std::mutex s_fiber_states_mtx;
+
+thread_local Fiber* Fiber::tls_current_ = nullptr;
+
+Fiber* Fiber::ConvertCurrentThread() {
+  auto* f = new Fiber();
+  f->is_thread_fiber_ = true;
+  tls_current_ = f;
+
+  auto* state = new AndroidFiberState();
+  state->running = true;
+
+  std::lock_guard<std::mutex> lock(s_fiber_states_mtx);
+  s_fiber_states[f] = state;
+
+  return f;
+}
+
+Fiber* Fiber::Create(size_t stack_size, void (*entry)(void*), void* arg) {
+  auto* f = new Fiber();
+  f->entry_ = entry;
+  f->arg_ = arg;
+  f->stack_.resize(stack_size);
+
+  auto* state = new AndroidFiberState();
+  state->running = false;
+
+  {
+    std::lock_guard<std::mutex> lock(s_fiber_states_mtx);
+    s_fiber_states[f] = state;
+  }
+
+  state->os_thread = std::thread([f, state]() {
+    {
+      std::unique_lock<std::mutex> lock(state->mtx);
+      state->cv.wait(lock, [state]() { return state->running || state->terminating; });
+    }
+
+    if (!state->terminating) {
+      tls_current_ = f;
+      f->entry_(f->arg_);
+    }
+  });
+
+  return f;
+}
+
+/*static*/ void Fiber::Trampoline() {
+  // Não é utilizado no backend do Android
+}
+
+void Fiber::SwitchTo(Fiber* target) {
+  Fiber* from = tls_current_;
+
+  AndroidFiberState* from_state = nullptr;
+  AndroidFiberState* target_state = nullptr;
+
+  {
+    std::lock_guard<std::mutex> lock(s_fiber_states_mtx);
+    from_state = s_fiber_states[from];
+    target_state = s_fiber_states[target];
+  }
+
+  if (!from_state || !target_state) return;
+
+  // Acorda a thread de destino
+  {
+    std::lock_guard<std::mutex> lock(target_state->mtx);
+    target_state->running = true;
+  }
+  target_state->cv.notify_one();
+
+  // Suspende a thread atual
+  {
+    std::unique_lock<std::mutex> lock(from_state->mtx);
+    from_state->running = false;
+    from_state->cv.wait(lock, [from_state]() { return from_state->running || from_state->terminating; });
+  }
+
+  tls_current_ = from;
+}
+
+void Fiber::Destroy() {
+  if (is_thread_fiber_) {
+    tls_current_ = nullptr;
+  } else {
+    assert(this != tls_current_ && "Destroy called on the currently running fiber");
+  }
+
+  AndroidFiberState* state = nullptr;
+  {
+    std::lock_guard<std::mutex> lock(s_fiber_states_mtx);
+    auto it = s_fiber_states.find(this);
+    if (it != s_fiber_states.end()) {
+      state = it->second;
+      s_fiber_states.erase(it);
+    }
+  }
+
+  if (state) {
+    if (!is_thread_fiber_ && state->os_thread.joinable()) {
+      {
+        std::lock_guard<std::mutex> lock(state->mtx);
+        state->terminating = true;
+        state->running = true;
+      }
+      state->cv.notify_one();
+      state->os_thread.join();
+    }
+    delete state;
+  }
+
+  delete this;
+}
+
+}  // namespace rex::thread
+
+#else
+
+// ============================================================================
+// ORIGINAL POSIX IMPLEMENTATION (Linux/Mac)
+// ============================================================================
 
 namespace rex::thread {
 
@@ -80,5 +223,7 @@ void Fiber::Destroy() {
 }
 
 }  // namespace rex::thread
+
+#endif // defined(__ANDROID__)
 
 #endif  // REX_PLATFORM_LINUX || REX_PLATFORM_MAC
