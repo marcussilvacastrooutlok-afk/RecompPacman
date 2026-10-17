@@ -47,7 +47,8 @@ jobs:
             libxrender-dev \
             libxtst-dev \
             libxinerama-dev \
-            libxfixes-dev
+            libxfixes-dev \
+            libx11-xcb-dev
 
       - name: Verificar ambiente
         run: |
