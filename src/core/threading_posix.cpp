@@ -27,7 +27,6 @@ static_assert(REX_PLATFORM_LINUX || REX_PLATFORM_MAC, "This file is POSIX-only")
 
 #if defined(__APPLE__)
 #include <cstdio>
-
 #include <fcntl.h>
 #endif
 #include <sys/syscall.h>
@@ -41,13 +40,6 @@ static_assert(REX_PLATFORM_LINUX || REX_PLATFORM_MAC, "This file is POSIX-only")
 #include <rex/thread/timer_queue.h>
 
 #include <sched.h>
-
-#if REX_PLATFORM_ANDROID
-#include <dlfcn.h>
-
-#include <rex/main_android.h>
-#include <rex/string.h>
-#endif
 
 #if REX_PLATFORM_LINUX
 // SIGEV_THREAD_ID in timer_create(...) is a Linux extension
@@ -65,29 +57,12 @@ static_assert(REX_PLATFORM_LINUX || REX_PLATFORM_MAC, "This file is POSIX-only")
 namespace rex::thread {
 
 #if REX_PLATFORM_ANDROID
-// May be null if no dynamically loaded functions are required.
-static void* android_libc_;
-// API 26+.
-static int (*android_pthread_getname_np_)(pthread_t pthread, char* buf, size_t n);
-
 void AndroidInitialize() {
-  if (rex::GetAndroidApiLevel() >= 26) {
-    android_libc_ = dlopen("libc.so", RTLD_NOW);
-    assert_not_null(android_libc_);
-    if (android_libc_) {
-      android_pthread_getname_np_ = reinterpret_cast<decltype(android_pthread_getname_np_)>(
-          dlsym(android_libc_, "pthread_getname_np"));
-      assert_not_null(android_pthread_getname_np_);
-    }
-  }
+  // Initialization no longer needed because Android API >= 26
+  // supports pthread_getname_np natively.
 }
 
 void AndroidShutdown() {
-  android_pthread_getname_np_ = nullptr;
-  if (android_libc_) {
-    dlclose(android_libc_);
-    android_libc_ = nullptr;
-  }
 }
 #endif
 
@@ -98,17 +73,10 @@ inline timespec DurationToTimeSpec(std::chrono::duration<_Rep, _Period> duration
   return timespec{div.quot, div.rem};
 }
 
-// Thread interruption is done using user-defined signals
-// This implementation uses the SIGRTMAX - SIGRTMIN to signal to a thread
-// gdb tip, for SIG = SIGRTMIN + SignalType : handle SIG nostop
-// lldb tip, for SIG = SIGRTMIN + SignalType : process handle SIG -s false
 enum class SignalType {
   kThreadSuspend,
   kThreadUserCallback,
 #if REX_PLATFORM_ANDROID
-  // pthread_cancel is not available on Android, using a signal handler for
-  // simplified PTHREAD_CANCEL_ASYNCHRONOUS-like behavior - not disabling
-  // cancellation currently, so should be enough.
   kThreadTerminate,
 #endif
   k_Count
@@ -116,8 +84,6 @@ enum class SignalType {
 
 int GetSystemSignal(SignalType num) {
 #if defined(__APPLE__)
-  // macOS has no realtime signals (SIGRTMIN..SIGRTMAX); map the runtime's
-  // signals onto the two user-defined signals.
   switch (num) {
     case SignalType::kThreadSuspend:
       return SIGUSR1;
@@ -170,10 +136,7 @@ void install_signal_handler(SignalType type) {
   }
 }
 
-// TODO(dougvj)
 void EnableAffinityConfiguration() {}
-
-// uint64_t ticks() { return mach_absolute_time(); }
 
 uint32_t current_thread_system_id() {
 #if defined(__APPLE__)
@@ -200,13 +163,10 @@ void Sleep(std::chrono::microseconds duration) {
   int ret = 0;
   do {
     ret = nanosleep(p_rqtp, p_rmtp);
-    // Swap requested for remaining in case of signal interruption
-    // in which case, we start sleeping again for the remainder
     std::swap(p_rqtp, p_rmtp);
   } while (ret == -1 && errno == EINTR);
 }
 
-// TODO(bwrsandman) Implement by allowing alert interrupts from IO operations
 thread_local bool alertable_state_ = false;
 bool DispatchCurrentThreadUserCallback();
 SleepResult AlertableSleep(std::chrono::microseconds duration) {
@@ -249,11 +209,6 @@ bool SetTlsValue(TlsHandle handle, uintptr_t value) {
 }
 
 #if defined(__APPLE__)
-// macOS does not implement unnamed POSIX semaphores (sem_init fails with
-// ENOSYS). Emulate one with a named semaphore that is unlinked immediately
-// after creation: the name is released but the descriptor stays valid until
-// sem_close, and sem_wait/sem_post remain async-signal-safe (needed because
-// WaitSuspended() runs from a signal handler).
 static sem_t* RexCreateAnonymousSemaphore() {
   static std::atomic<uint64_t> counter{0};
   char name[64];
@@ -265,13 +220,12 @@ static sem_t* RexCreateAnonymousSemaphore() {
   }
   return sem;
 }
-#endif  // __APPLE__
+#endif
 
 class PosixConditionBase {
  public:
   PosixConditionBase() {
-#if REX_PLATFORM_LINUX
-    // Use robust mutexes so waits can recover if owner thread terminates.
+#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr) == 0) {
       if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST) == 0) {
@@ -290,7 +244,7 @@ class PosixConditionBase {
   WaitResult Wait(std::chrono::milliseconds timeout) {
     bool executed;
     auto predicate = [this] { return this->signaled(); };
-#if REX_PLATFORM_LINUX
+#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
     auto native_mutex = static_cast<pthread_mutex_t*>(mutex_.native_handle());
     int lock_result = pthread_mutex_lock(native_mutex);
     if (lock_result == EOWNERDEAD) {
@@ -307,7 +261,7 @@ class PosixConditionBase {
     } else {
       if (timeout == std::chrono::milliseconds::max()) {
         cond_.wait(lock, predicate);
-        executed = true;  // Did not time out;
+        executed = true;
       } else {
         executed = cond_.wait_for(lock, timeout, predicate);
       }
@@ -344,7 +298,7 @@ class PosixConditionBase {
       locks.reserve(handles.size());
 
       for (size_t i = 0; i < handles.size(); ++i) {
-#if REX_PLATFORM_LINUX
+#if REX_PLATFORM_LINUX && !REX_PLATFORM_ANDROID
         auto native_mutex = static_cast<pthread_mutex_t*>(handles[i]->mutex_.native_handle());
         int result = pthread_mutex_trylock(native_mutex);
         if (result == 0 || result == EOWNERDEAD) {
@@ -432,10 +386,6 @@ class PosixConditionBase {
   std::mutex mutex_;
 };
 
-// There really is no native POSIX handle for a single wait/signal construct
-// pthreads is at a lower level with more handles for such a mechanism.
-// This simple wrapper class functions as our handle and uses conditional
-// variables for waits and signals.
 template <typename T>
 class PosixCondition {};
 
@@ -516,7 +466,6 @@ class PosixCondition<Mutant> : public PosixConditionBase {
     if (owner_ == std::this_thread::get_id() && count_ > 0) {
       auto lock = std::unique_lock<std::mutex>(mutex_);
       --count_;
-      // Free to be acquired by another thread
       if (count_ == 0) {
         cond_.notify_all();
       }
@@ -556,9 +505,7 @@ class PosixCondition<Timer> : public PosixConditionBase {
 
   void SetOnce(std::chrono::steady_clock::time_point due_time, std::function<void()> opt_callback) {
     Cancel();
-
     std::lock_guard<std::mutex> lock(mutex_);
-
     callback_ = std::move(opt_callback);
     signal_ = false;
     wait_item_ = QueueTimerOnce(&CompletionRoutine, this, due_time);
@@ -567,9 +514,7 @@ class PosixCondition<Timer> : public PosixConditionBase {
   void SetRepeating(std::chrono::steady_clock::time_point due_time,
                     std::chrono::milliseconds period, std::function<void()> opt_callback) {
     Cancel();
-
     std::lock_guard<std::mutex> lock(mutex_);
-
     callback_ = std::move(opt_callback);
     signal_ = false;
     wait_item_ = QueueTimerRecurring(&CompletionRoutine, this, due_time, period);
@@ -591,7 +536,6 @@ class PosixCondition<Timer> : public PosixConditionBase {
     assert_not_null(userdata);
     auto timer = reinterpret_cast<PosixCondition<Timer>*>(userdata);
     timer->Signal();
-    // As the callback may reset the timer, store local.
     std::function<void()> callback;
     {
       std::lock_guard<std::mutex> lock(timer->mutex_);
@@ -611,7 +555,7 @@ class PosixCondition<Timer> : public PosixConditionBase {
   }
   std::weak_ptr<TimerQueueWaitItem> wait_item_;
   std::function<void()> callback_;
-  bool signal_;  // Protected by mutex_
+  bool signal_;  
   const bool manual_reset_;
 };
 
@@ -641,9 +585,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
     suspend_sem_ = RexCreateAnonymousSemaphore();
 #else
     sem_init(&suspend_sem_, 0, 0);
-#endif
-#if REX_PLATFORM_ANDROID
-    android_pre_api_26_name_[0] = '\0';
 #endif
   }
   bool Initialize(Thread::CreationParameters params, ThreadStartData* start_data) {
@@ -675,8 +616,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
     return true;
   }
 
-  /// Constructor for existing thread. This should only happen once called by
-  /// Thread::GetCurrentThread() on the main thread
   explicit PosixCondition(pthread_t thread)
       : thread_(thread),
         signaled_(false),
@@ -688,15 +627,9 @@ class PosixCondition<Thread> : public PosixConditionBase {
 #else
     sem_init(&suspend_sem_, 0, 0);
 #endif
-#if REX_PLATFORM_ANDROID
-    android_pre_api_26_name_[0] = '\0';
-#endif
   }
 
   virtual ~PosixCondition() {
-    // Match Canary/Edge behavior.
-    // Force-cancel/join from the condition destructor can self-join/crash
-    // depending on shutdown ordering, so threads must be stopped explicitly.
   }
 
   bool Signal() override { return true; }
@@ -706,23 +639,9 @@ class PosixCondition<Thread> : public PosixConditionBase {
     auto result = std::array<char, 17>{'\0'};
     std::unique_lock<std::mutex> lock(state_mutex_);
     if (state_ != State::kUninitialized && state_ != State::kFinished) {
-#if REX_PLATFORM_ANDROID
-      // pthread_getname_np was added in API 26 - below that, store the name in
-      // this object, which may be only modified through Xenia threading, but
-      // should be enough in most cases.
-      if (android_pthread_getname_np_) {
-        if (android_pthread_getname_np_(thread_, result.data(), result.size() - 1) != 0) {
-          assert_always();
-        }
-      } else {
-        std::lock_guard<std::mutex> lock(android_pre_api_26_name_mutex_);
-        rex::string::copy_truncating(result.data(), android_pre_api_26_name_, result.size());
-      }
-#else
       if (pthread_getname_np(thread_, result.data(), result.size() - 1) != 0) {
         assert_always();
       }
-#endif
     }
     return std::string(result.data());
   }
@@ -732,29 +651,14 @@ class PosixCondition<Thread> : public PosixConditionBase {
     std::unique_lock<std::mutex> lock(state_mutex_);
     if (state_ != State::kUninitialized && state_ != State::kFinished) {
 #if defined(__APPLE__)
-      // macOS pthread_setname_np() only names the calling thread.
       if (pthread_equal(thread_, pthread_self())) {
         pthread_setname_np(std::string(name).c_str());
       }
 #else
       pthread_setname_np(thread_, std::string(name).c_str());
 #endif
-#if REX_PLATFORM_ANDROID
-      SetAndroidPreApi26Name(name);
-#endif
     }
   }
-
-#if REX_PLATFORM_ANDROID
-  void SetAndroidPreApi26Name(const std::string_view name) {
-    if (android_pthread_getname_np_) {
-      return;
-    }
-    std::lock_guard<std::mutex> lock(android_pre_api_26_name_mutex_);
-    rex::string::copy_truncating(android_pre_api_26_name_, name,
-                                 rex::countof(android_pre_api_26_name_));
-  }
-#endif
 
 #if defined(__APPLE__)
   uint32_t system_id() const { return static_cast<uint32_t>(pthread_mach_thread_np(thread_)); }
@@ -765,8 +669,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
   uint64_t affinity_mask() {
     WaitStarted();
 #if defined(__APPLE__)
-    // macOS doesn't expose Linux-style pthread affinity masks; report every
-    // logical processor as available.
     auto cpu_count = std::min<uint32_t>(logical_processor_count(), 64);
     if (cpu_count == 64) {
       return std::numeric_limits<uint64_t>::max();
@@ -796,8 +698,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
   void set_affinity_mask(uint64_t mask) {
     WaitStarted();
 #if defined(__APPLE__)
-    // macOS doesn't expose Linux-style pthread affinity masks; keep this a
-    // no-op so higher layers can build and run.
     (void)mask;
 #else
     cpu_set_t cpu_set;
@@ -827,7 +727,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
     if (ret != 0) {
       return -1;
     }
-
     return param.sched_priority;
   }
 
@@ -859,8 +758,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
       has_pending_user_callbacks_.store(true, std::memory_order_release);
     }
 
-    // If the callback is queued on the current thread, don't self-signal.
-    // Alertable waits drain this queue in normal thread context.
     if (pthread_equal(thread_, pthread_self())) {
       if (alertable_state_) {
         DispatchQueuedUserCallbacks();
@@ -869,8 +766,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
     }
 
 #if defined(__APPLE__)
-    // macOS has no sigqueue/pthread_sigqueue; pthread_kill delivers the signal
-    // without the sigval payload.
     int result = pthread_kill(thread_, GetSystemSignal(SignalType::kThreadUserCallback));
 #else
     sigval value{};
@@ -924,7 +819,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
     --suspend_count_;
     if (suspend_count_ == 0 && state_ == State::kSuspended) {
       state_ = State::kRunning;
-      // Async-signal-safe wakeup for WaitSuspended() from signal handler path.
       sem_post(suspend_sem_ptr());
     }
     state_signal_.notify_all();
@@ -961,11 +855,8 @@ class PosixCondition<Thread> : public PosixConditionBase {
       std::unique_lock<std::mutex> lock(state_mutex_);
       if (state_ == State::kFinished) {
         if (is_current_thread) {
-          // This is really bad. Some thread must have called Terminate() on us
-          // just before we decided to terminate ourselves
           assert_always();
           for (;;) {
-            // Wait for pthread_cancel() to actually happen.
           }
         }
         return;
@@ -1000,7 +891,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
     state_signal_.wait(lock, [this] { return state_ != State::kUninitialized; });
   }
 
-  /// Uses sem_wait because it may be called from signal handler context.
   void WaitSuspended() {
     int ret;
     do {
@@ -1029,8 +919,8 @@ class PosixCondition<Thread> : public PosixConditionBase {
   pthread_t thread_;
   bool signaled_;
   int exit_code_;
-  State state_;             // Protected by state_mutex_
-  uint32_t suspend_count_;  // Protected by state_mutex_
+  State state_;             
+  uint32_t suspend_count_;  
 #if defined(__APPLE__)
   sem_t* suspend_sem_ = SEM_FAILED;
   sem_t* suspend_sem_ptr() { return suspend_sem_; }
@@ -1043,12 +933,6 @@ class PosixCondition<Thread> : public PosixConditionBase {
   mutable std::condition_variable state_signal_;
   std::deque<std::function<void()>> user_callbacks_;
   std::atomic<bool> has_pending_user_callbacks_{false};
-#if REX_PLATFORM_ANDROID
-  // Name accessible via name() on Android before API 26 which added
-  // pthread_getname_np.
-  mutable std::mutex android_pre_api_26_name_mutex_;
-  char android_pre_api_26_name_[16];
-#endif
 };
 
 class PosixWaitHandle {
@@ -1116,8 +1000,6 @@ std::chrono::milliseconds ComputeAlertableWaitTimeout(
 
 }  // namespace
 
-// This wraps a condition object as our handle because posix has no single
-// native handle for higher level concurrency constructs such as semaphores
 template <typename T>
 class PosixConditionHandle : public T, public PosixWaitHandle {
  public:
@@ -1420,11 +1302,6 @@ void* PosixCondition<Thread>::ThreadStartRoutine(void* parameter) {
   {
     std::unique_lock<std::mutex> lock(thread->handle_.state_mutex_);
     thread->handle_.state_ = create_suspended ? State::kSuspended : State::kRunning;
-    // Arm the suspend counter in the SAME critical section that publishes the
-    // started state. Resume() only waits for state_ != kUninitialized, so if it
-    // observed the state published here while suspend_count_ was still 0 it
-    // would take the "not suspended" path, return false without decrementing,
-    // and the wait below would then never be satisfied.
     if (create_suspended) {
       thread->handle_.suspend_count_ = 1;
     }
@@ -1475,24 +1352,16 @@ Thread* Thread::GetCurrentThread() {
     return current_thread_;
   }
 
-  // Threads not created by Thread::Create (typically main thread) still need
-  // process-wide signal handlers used by suspend/APC machinery.
   install_signal_handler(SignalType::kThreadSuspend);
   install_signal_handler(SignalType::kThreadUserCallback);
 #if REX_PLATFORM_ANDROID
   install_signal_handler(SignalType::kThreadTerminate);
 #endif
 
-  // Should take this route only for threads not created by Thread::Create.
-  // The only thread not created by Thread::Create should be the main thread.
   pthread_t handle = pthread_self();
 
   current_thread_ = new PosixThread(handle);
   current_thread_condition_ = &current_thread_->condition();
-  // TODO(bwrsandman): Disabling deleting thread_local current thread to prevent
-  //                   assert in destructor. Since this is thread local, the
-  //                   "memory leaking" is controlled.
-  // atexit([] { delete current_thread_; });
 
   return current_thread_;
 }
@@ -1501,10 +1370,8 @@ void Thread::Exit(int exit_code) {
   if (current_thread_) {
     current_thread_->Terminate(exit_code);
   } else {
-    // Should only happen with the main thread
     pthread_exit(reinterpret_cast<void*>(exit_code));
   }
-  // Function must not return
   assert_always();
 }
 
@@ -1513,11 +1380,6 @@ void set_current_thread_name(const std::string_view name) {
   pthread_setname_np(std::string(name).c_str());
 #else
   pthread_setname_np(pthread_self(), std::string(name).c_str());
-#endif
-#if REX_PLATFORM_ANDROID
-  if (!android_pthread_getname_np_ && current_thread_) {
-    current_thread_->condition().SetAndroidPreApi26Name(name);
-  }
 #endif
 }
 
@@ -1530,8 +1392,6 @@ static void signal_handler(int signal, siginfo_t* /*info*/, void* /*context*/) {
       current_thread_->WaitSuspended();
     } break;
     case SignalType::kThreadUserCallback: {
-      // Callbacks are drained from alertable waits in normal thread context.
-      // This signal is only used as a wakeup hint.
     } break;
 #if REX_PLATFORM_ANDROID
     case SignalType::kThreadTerminate: {
