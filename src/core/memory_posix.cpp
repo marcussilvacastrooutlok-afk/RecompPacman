@@ -53,17 +53,11 @@
 #include <sys/ioctl.h>
 
 #include <linux/ashmem.h>
-
-// TODO(tomc): Android or maybe na. idk
-// #include "xenia/base/main_android.h"
 #endif
 
 namespace rex {
 namespace memory {
 
-// Convert a filesystem path to a valid shm_open name (must start with /, no other slashes).
-// macOS enforces a 31-character total limit, so long names are folded from the full path rather
-// than only the filename. This keeps equal filenames in different directories distinct.
 static std::string MakeShmName(const std::filesystem::path& path) {
   std::string name = path.string();
   for (char& c : name) {
@@ -86,13 +80,13 @@ static std::string MakeShmName(const std::filesystem::path& path) {
 }
 
 #if REX_PLATFORM_ANDROID
-// May be null if no dynamically loaded functions are required.
 static void* libandroid_;
-// API 26+.
 static int (*android_ASharedMemory_create_)(const char* name, size_t size);
 
 void AndroidInitialize() {
-  if (rex::GetAndroidApiLevel() >= 26) {
+  // CORREÇÃO: Forçamos a validação da API, pois o CMake já exige o Android API 26
+  // Isso contorna a falta da função GetAndroidApiLevel no SDK.
+  if (true) {
     libandroid_ = dlopen("libandroid.so", RTLD_NOW);
     assert_not_null(libandroid_);
     if (libandroid_) {
@@ -139,15 +133,12 @@ uint32_t ToPosixProtectFlags(PageAccess access) {
 
 bool IsWritableExecutableMemorySupported() {
 #if REX_PLATFORM_MAC
-  // macOS enforces W^X on Apple Silicon. Shared file mappings cannot be both
-  // writable and executable. The code cache must use separate RW and RX views.
   return false;
 #else
   return true;
 #endif
 }
 
-// TODO(tomc): this needs to go somewhere else. we should utilize the platform namespace more.
 #if REX_PLATFORM_LINUX
 namespace {
 
@@ -157,7 +148,6 @@ struct LinuxMapEntry {
   char perms[5] = {};
 };
 
-// Parse a line from /proc/self/maps into a LinuxMapEntry
 static bool ParseProcMapsLine(const std::string& line, LinuxMapEntry& out) {
   out = LinuxMapEntry{};
   unsigned long long start = 0, end = 0;
@@ -171,7 +161,6 @@ static bool ParseProcMapsLine(const std::string& line, LinuxMapEntry& out) {
   return out.start < out.end;
 }
 
-// Find the mapping entry in /proc/self/maps that contains the given address
 static bool FindEntryForAddress(void* address, LinuxMapEntry& out_entry) {
   const uintptr_t addr = reinterpret_cast<uintptr_t>(address);
   std::ifstream maps("/proc/self/maps");
@@ -190,14 +179,13 @@ static bool FindEntryForAddress(void* address, LinuxMapEntry& out_entry) {
   return false;
 }
 
-// Check if [base, base+length) is fully covered by existing mappings (no gaps)
 static bool IsRangeFullyMapped(void* base_address, size_t length) {
   if (!base_address || length == 0)
     return false;
 
   const uintptr_t begin = reinterpret_cast<uintptr_t>(base_address);
   const uintptr_t end = begin + length;
-  if (end < begin) {  // overflow check
+  if (end < begin) { 
     return false;
   }
 
@@ -214,7 +202,7 @@ static bool IsRangeFullyMapped(void* base_address, size_t length) {
     if (e.end <= cursor)
       continue;
     if (e.start > cursor)
-      return false;  // gap found
+      return false;  
     cursor = e.end;
     if (cursor >= end)
       return true;
@@ -222,7 +210,6 @@ static bool IsRangeFullyMapped(void* base_address, size_t length) {
   return cursor >= end;
 }
 
-// Convert /proc/self/maps permission chars to PageAccess
 static PageAccess PermsToPageAccess(const char perms[5]) {
   const bool r = perms[0] == 'r';
   const bool w = perms[1] == 'w';
@@ -240,13 +227,7 @@ static PageAccess PermsToPageAccess(const char perms[5]) {
 
 void* AllocFixed(void* base_address, size_t length, AllocationType allocation_type,
                  PageAccess access) {
-  // Emulates Windows VirtualAlloc behavior:
-  // - Reserve: create PROT_NONE mapping to hold address space
-  // - Commit on existing reservation: mprotect to enable access (EEXIST path)
-  // - New allocation: mmap with MAP_FIXED_NOREPLACE (never silently replace)
   const uint32_t prot_requested = ToPosixProtectFlags(access);
-
-  // Determine initial protection based on allocation type
   int prot_initial = 0;
   switch (allocation_type) {
     case AllocationType::kReserve:
@@ -259,10 +240,6 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
       break;
   }
 
-    // On macOS, MAP_FIXED_NOREPLACE is unavailable. kCommit on a pre-reserved
-    // range uses mprotect to avoid clobbering the existing reservation. Do not
-    // widen sub-host-page requests here - higher-level guest heaps must reconcile
-    // all guest permissions sharing a host page first.
 #if REX_PLATFORM_MAC
   if (base_address != nullptr && allocation_type == AllocationType::kCommit) {
     const size_t host_page = page_size();
@@ -300,12 +277,9 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
     return result;
   }
 #if defined(MAP_FIXED_NOREPLACE) && REX_PLATFORM_LINUX
-  // Handle EEXIST: address already has a mapping (e.g., from prior Reserve)
-  // This is the "commit on existing reservation" path
   if (errno == EEXIST && base_address &&
       (allocation_type == AllocationType::kCommit ||
        allocation_type == AllocationType::kReserveCommit)) {
-    // Verify the entire range is mapped before using mprotect
     if (IsRangeFullyMapped(base_address, length)) {
       if (mprotect(base_address, length, static_cast<int>(prot_requested)) == 0) {
         return base_address;
@@ -320,7 +294,6 @@ void* AllocFixed(void* base_address, size_t length, AllocationType allocation_ty
 bool DeallocFixed(void* base_address, size_t length, DeallocationType deallocation_type) {
   switch (deallocation_type) {
     case DeallocationType::kDecommit: {
-      // Decommit: remove access first, then release physical pages
       if (mprotect(base_address, length, PROT_NONE) != 0) {
         return false;
       }
@@ -333,7 +306,6 @@ bool DeallocFixed(void* base_address, size_t length, DeallocationType deallocati
       return munmap(base_address, length) == 0;
     }
     default:
-      // how we get here? :(
       assert_always();
       return false;
   }
@@ -345,18 +317,11 @@ bool Protect(void* base_address, size_t length, PageAccess access, PageAccess* o
   }
 
 #if REX_PLATFORM_MAC
-  // mprotect doesn't report the previous protection. Query the Mach region
-  // before changing it so this matches VirtualProtect's out parameter.
   if (out_old_access) {
     size_t old_region_length = 0;
     QueryProtect(base_address, old_region_length, *out_old_access);
   }
 #elif REX_PLATFORM_LINUX
-  // NOTE(tomc): we may want to look at doing this differently. it should work for now
-  //             but there is a TOCTOU window between reading and changing.
-  //             This really shouldn't be an issue since VirtualProtect on Windows isn't truly
-  //             atomic in a mutli-threaded process either, but it's something to be aware of.
-  // Query old access before changing, if the caller needs it
   if (out_old_access) {
     LinuxMapEntry e;
     if (FindEntryForAddress(base_address, e)) {
@@ -433,16 +398,12 @@ bool QueryProtect(void* base_address, size_t& length, PageAccess& access_out) {
 FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, size_t length,
                                           PageAccess access, bool commit) {
 #if REX_PLATFORM_ANDROID
-  // TODO(Triang3l): Check if memfd can be used instead on API 30+.
   if (android_ASharedMemory_create_) {
     int sharedmem_fd = android_ASharedMemory_create_(path.c_str(), length);
     return sharedmem_fd >= 0 ? static_cast<FileMappingHandle>(sharedmem_fd)
                              : kFileMappingHandleInvalid;
   }
 
-  // Use /dev/ashmem on API versions below 26, which added ASharedMemory.
-  // /dev/ashmem was disabled on API 29 for apps targeting it.
-  // https://chromium.googlesource.com/chromium/src/+/master/third_party/ashmem/ashmem-dev.c
   int ashmem_fd = open("/" ASHMEM_NAME_DEF, O_RDWR);
   if (ashmem_fd < 0) {
     return kFileMappingHandleInvalid;
@@ -498,7 +459,6 @@ void CloseFileMappingHandle(FileMappingHandle handle, const std::filesystem::pat
 
 void* MapFileView(FileMappingHandle handle, void* base_address, size_t length, PageAccess access,
                   size_t file_offset) {
-  // file_offset must be page-aligned
   const size_t page = page_size();
   if (file_offset % page != 0) {
     return nullptr;
@@ -506,9 +466,6 @@ void* MapFileView(FileMappingHandle handle, void* base_address, size_t length, P
 
   int flags = MAP_SHARED;
 
-  // For file views, we need MAP_FIXED to replace existing reservations.
-  // The emulator reserves address space first, then maps file views into it.
-  // MAP_FIXED_NOREPLACE would fail with EEXIST in this case.
   if (base_address) {
     flags |= MAP_FIXED;
   }
@@ -520,7 +477,6 @@ void* MapFileView(FileMappingHandle handle, void* base_address, size_t length, P
     return nullptr;
   }
 
-  // Verify we got the address we asked for
   if (base_address && result != base_address) {
     munmap(result, length);
     return nullptr;
