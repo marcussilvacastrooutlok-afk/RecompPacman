@@ -181,6 +181,19 @@ jobs:
             --include='*.cmake' \
             --include='*.mk' || true
 
+      - name: Compilar codigo gerado para Android (ARM64)
+        working-directory: pacman_project
+        run: |
+          echo "=== Configurando o projeto com Android NDK ==="
+          cmake -B build-android \
+            -DCMAKE_TOOLCHAIN_FILE="$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM=android-26 \
+            -DCMAKE_BUILD_TYPE=Release
+            
+          echo "=== Compilando biblioteca Android ==="
+          cmake --build build-android --config Release
+
       - name: Salvar diagnosticos
         if: always()
         uses: actions/upload-artifact@v4
