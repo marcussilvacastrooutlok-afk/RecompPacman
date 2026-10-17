@@ -48,7 +48,9 @@ jobs:
             libxtst-dev \
             libxinerama-dev \
             libxfixes-dev \
-            libx11-xcb-dev
+            libx11-xcb-dev \
+            libc++-21-dev \
+            libc++abi-21-dev
 
       - name: Verificar ambiente
         run: |
@@ -76,7 +78,10 @@ jobs:
         run: |
           cmake --preset linux-amd64 \
             -DCMAKE_C_COMPILER=clang-21 \
-            -DCMAKE_CXX_COMPILER=clang++-21
+            -DCMAKE_CXX_COMPILER=clang++-21 \
+            -DCMAKE_CXX_FLAGS="-stdlib=libc++" \
+            -DCMAKE_EXE_LINKER_FLAGS="-stdlib=libc++" \
+            -DCMAKE_SHARED_LINKER_FLAGS="-stdlib=libc++"
 
       - name: Compilar e instalar SDK ReXGlue
         run: |
