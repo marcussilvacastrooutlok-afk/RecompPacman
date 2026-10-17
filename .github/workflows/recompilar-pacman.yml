@@ -44,7 +44,10 @@ jobs:
             libxkbcommon-dev \
             libxss-dev \
             libxext-dev \
-            libxrender-dev
+            libxrender-dev \
+            libxtst-dev \
+            libxinerama-dev \
+            libxfixes-dev
 
       - name: Verificar ambiente
         run: |
