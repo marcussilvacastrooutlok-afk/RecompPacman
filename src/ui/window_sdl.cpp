@@ -36,7 +36,10 @@
 
 #include <rex/ui/surface_mac.h>
 #else
+// CORREÇÃO: Evitar incluir cabeçalhos do X11 no Android
+#if !REX_PLATFORM_ANDROID
 #include <X11/Xlib-xcb.h>
+#endif
 #include <rex/ui/surface_gnulinux.h>
 #endif
 
@@ -409,6 +412,7 @@ std::unique_ptr<Surface> WindowSDL::CreateSurfaceImpl(Surface::TypeFlags allowed
       return std::make_unique<WaylandSurface>(wl_display_ptr, wl_surface_ptr, sdl_window_);
     }
   }
+#if !REX_PLATFORM_ANDROID
   if (allowed_types & Surface::kTypeFlag_XcbWindow) {
     auto* display = static_cast<Display*>(
         SDL_GetPointerProperty(props, SDL_PROP_WINDOW_X11_DISPLAY_POINTER, nullptr));
@@ -418,6 +422,7 @@ std::unique_ptr<Surface> WindowSDL::CreateSurfaceImpl(Surface::TypeFlags allowed
       return std::make_unique<XcbWindowSurface>(XGetXCBConnection(display), x11_window);
     }
   }
+#endif
 #endif
   return nullptr;
 }
