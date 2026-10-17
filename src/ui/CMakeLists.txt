@@ -72,6 +72,9 @@ elseif(APPLE)
     set(REXUI_PLATFORM_SOURCES
         surface_mac.cpp
     )
+elseif(ANDROID)
+    # CORREÇÃO: No Android, a superfície é gerida diretamente. Não incluímos o ficheiro do Linux.
+    set(REXUI_PLATFORM_SOURCES "")
 else()
     set(REXUI_PLATFORM_SOURCES
         surface_gnulinux.cpp
@@ -146,7 +149,8 @@ if(REXGLUE_USE_VULKAN)
 endif()
 
 # Platform-specific dependencies
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+    # CORREÇÃO: Não procurar dependências de desktop Linux (X11/Wayland) quando estiver no Android
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(X11_XCB REQUIRED x11-xcb)
     # Required, not optional: vulkan/api.h pulls in <wayland-client.h> on every
@@ -173,4 +177,3 @@ endif()
 if(REXGLUE_USE_D3D12)
     target_link_libraries(rexui PUBLIC dxc-headers)
 endif()
-
