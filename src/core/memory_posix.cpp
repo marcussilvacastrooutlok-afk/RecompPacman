@@ -9,6 +9,8 @@
  * @modified    Tom Clay & Rien Gupta, 2026 - Adapted for ReXGlue runtime (POSIX + macOS)
  */
 
+#include <rex/platform.h>
+
 #include <cerrno>
 #include <cstddef>
 #include <cstdio>
@@ -32,7 +34,6 @@
 #include <rex/logging.h>
 #include <rex/math.h>
 #include <rex/memory/utils.h>
-#include <rex/platform.h>
 #include <rex/string.h>
 
 // macOS off_t is 64-bit with no *64 large-file variants; Linux keeps the
