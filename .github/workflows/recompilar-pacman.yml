@@ -149,7 +149,7 @@ jobs:
           fi
 
           echo "Configuracao encontrada: $CONFIG"
-          "$REXGLUE_BIN" codegen "$CONFIG"
+          "$REXGLUE_BIN" --force codegen "$CONFIG"
 
       - name: Verificar Android NDK
         run: |
