@@ -41,7 +41,10 @@ jobs:
             libasound2-dev \
             libpulse-dev \
             libwayland-dev \
-            libxkbcommon-dev
+            libxkbcommon-dev \
+            libxss-dev \
+            libxext-dev \
+            libxrender-dev
 
       - name: Verificar ambiente
         run: |
