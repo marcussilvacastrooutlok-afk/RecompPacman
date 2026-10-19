@@ -33,9 +33,6 @@
 #include <ffx_api/vk/ffx_api_vk.h>
 #endif
 
-#if REX_PLATFORM_ANDROID
-#include <rex/ui/surface_android.h>
-#endif
 #if REX_PLATFORM_GNU_LINUX
 #include <rex/ui/surface_gnulinux.h>
 #endif
@@ -423,11 +420,6 @@ Surface::TypeFlags VulkanPresenter::GetSurfaceTypesSupportedByInstance(
     return 0;
   }
   Surface::TypeFlags type_flags = 0;
-#if REX_PLATFORM_ANDROID
-  if (instance_extensions.ext_KHR_android_surface) {
-    type_flags |= Surface::kTypeFlag_AndroidNativeWindow;
-  }
-#endif
 #if REX_PLATFORM_GNU_LINUX
   if (instance_extensions.ext_KHR_wayland_surface) {
     type_flags |= Surface::kTypeFlag_WaylandSurface;
