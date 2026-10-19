@@ -304,3 +304,14 @@ std::vector<FileInfo> ListFiles(const std::filesystem::path& path) {
 
 }  // namespace filesystem
 }  // namespace rex
+// --- STUB PARA ANDROID ---
+#if defined(__ANDROID__)
+#include <string_view>
+namespace rex {
+namespace filesystem {
+int OpenAndroidContentFileDescriptor(std::string_view uri, const char* mode) {
+    return -1; // Função não implementada no SDK original
+}
+}
+}
+#endif
