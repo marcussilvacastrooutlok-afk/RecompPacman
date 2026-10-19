@@ -788,19 +788,6 @@ VulkanPresenter::ConnectOrReconnectPaintingToSurfaceFromUIThread(Surface& new_su
     }
     VkResult vulkan_surface_create_result = VK_ERROR_UNKNOWN;
     switch (surface_type) {
-#if REX_PLATFORM_ANDROID
-      case Surface::kTypeIndex_AndroidNativeWindow: {
-        auto& android_native_window_surface =
-            static_cast<const AndroidNativeWindowSurface&>(new_surface);
-        VkAndroidSurfaceCreateInfoKHR surface_create_info;
-        surface_create_info.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-        surface_create_info.pNext = nullptr;
-        surface_create_info.flags = 0;
-        surface_create_info.window = android_native_window_surface.window();
-        vulkan_surface_create_result = ifn.vkCreateAndroidSurfaceKHR(
-            instance, &surface_create_info, nullptr, &paint_context_.vulkan_surface);
-      } break;
-#endif
 #if REX_PLATFORM_GNU_LINUX
       case Surface::kTypeIndex_XcbWindow: {
         auto& xcb_window_surface = static_cast<const XcbWindowSurface&>(new_surface);
