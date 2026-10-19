@@ -100,6 +100,9 @@ target_include_directories(rexcore PRIVATE
 
 if(APPLE)
     target_link_libraries(rexcore PRIVATE pthread)
+elseif(ANDROID)
+    # CORREÇÃO: O Android tem pthread e rt embutidos na libc (Bionic), logo, só ligamos o dl
+    target_link_libraries(rexcore PRIVATE dl)
 elseif(UNIX)
     target_link_libraries(rexcore PRIVATE pthread rt dl)
 endif()
