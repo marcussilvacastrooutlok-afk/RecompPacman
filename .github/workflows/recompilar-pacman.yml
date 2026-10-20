@@ -102,16 +102,10 @@ jobs:
           elif [ -x "out/linux-amd64/rexglue" ]; then
             REXGLUE_BIN="$GITHUB_WORKSPACE/out/linux-amd64/rexglue"
           else
-            REXGLUE_REL="$(find out -type f \
-              -name rexglue -perm /111 \
-              -print -quit 2>/dev/null || true)"
-
-            if [ -z "$REXGLUE_REL" ]; then
-              echo "::error::Executavel rexglue nao encontrado."
-              exit 1
-            fi
-
-            REXGLUE_BIN="$GITHUB_WORKSPACE/$REXGLUE_REL"
+            echo "::error::Executavel rexglue x86-64 nao encontrado em out/linux-amd64."
+            echo "Arquivos encontrados:"
+            find out/linux-amd64 -type f -name rexglue -print 2>/dev/null || true
+            exit 1
           fi
 
           echo "REXGLUE_BIN=$REXGLUE_BIN" >> "$GITHUB_ENV"
@@ -191,7 +185,7 @@ jobs:
             -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release \
             -DREXSDK_DIR="$GITHUB_WORKSPACE"
-            
+
           echo "=== Compilando biblioteca Android ==="
           cmake --build build-android --config Release
 
