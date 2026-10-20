@@ -175,6 +175,25 @@ jobs:
             --include='*.cmake' \
             --include='*.mk' || true
 
+      - name: Corrigir caminho do codegen para host x86-64
+        working-directory: pacman_project
+        run: |
+          echo "=== Corrigindo executavel de codegen para o host ==="
+          test -x "$REXGLUE_BIN"
+
+          # O codegen roda no runner x86-64, nao no Android ARM64.
+          find . -type f \
+            \( -name 'CMakeLists.txt' -o -name '*.cmake' -o -name '*.txt' \) \
+            -not -path './build-android/*' -print0 |
+            xargs -0 -r sed -i \
+              "s|$GITHUB_WORKSPACE/out/linux-arm64/rexglue|$REXGLUE_BIN|g"
+
+          if grep -R -n "$GITHUB_WORKSPACE/out/linux-arm64/rexglue" . \
+              --exclude-dir=.git --exclude-dir=build-android; then
+            echo "::error::Ainda existe referencia ao executavel ARM64 no codegen."
+            exit 1
+          fi
+
       - name: Compilar codigo gerado para Android (ARM64)
         working-directory: pacman_project
         run: |
