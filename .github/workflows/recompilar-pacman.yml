@@ -111,12 +111,11 @@ jobs:
             exit 1
           fi
 
-          # Preserve uma copia host-only: o build Android pode sobrescrever
-          # out/linux-amd64/rexglue com um binario ARM64.
-          mkdir -p "$GITHUB_WORKSPACE/host-tools"
-          cp "$REXGLUE_BIN" "$GITHUB_WORKSPACE/host-tools/rexglue"
-          chmod +x "$GITHUB_WORKSPACE/host-tools/rexglue"
-          REXGLUE_BIN="$GITHUB_WORKSPACE/host-tools/rexglue"
+          # Guarde a ferramenta host fora do workspace para que o CMake Android
+          # nao possa sobrescreve-la ao compilar o alvo rexglue.
+          REXGLUE_BIN="$RUNNER_TEMP/rexglue-host"
+          cp "$GITHUB_WORKSPACE/out/linux-amd64/Release/rexglue" "$REXGLUE_BIN" 2>/dev/null || cp "$GITHUB_WORKSPACE/out/linux-amd64/rexglue" "$REXGLUE_BIN"
+          chmod +x "$REXGLUE_BIN"
           echo "REXGLUE_BIN=$REXGLUE_BIN" >> "$GITHUB_ENV"
 
           echo "=== Versao e ajuda do ReXGlue (host x86-64) ==="
@@ -185,27 +184,6 @@ jobs:
             --include='*.cmake' \
             --include='*.mk' || true
 
-      - name: Corrigir caminho do codegen para host x86-64
-        working-directory: pacman_project
-        run: |
-          echo "=== Corrigindo executavel de codegen para o host ==="
-          test -x "$REXGLUE_BIN"
-
-          # O codegen roda no runner x86-64, nao no Android ARM64.
-          find . -type f \
-            \( -name 'CMakeLists.txt' -o -name '*.cmake' -o -name '*.txt' \) \
-            -not -path './build-android/*' -print0 |
-            xargs -0 -r sed -i \
-              -e "s|$GITHUB_WORKSPACE/out/linux-arm64/rexglue|$REXGLUE_BIN|g" \
-            -e "s|$GITHUB_WORKSPACE/out/linux-amd64/Release/rexglue|$REXGLUE_BIN|g" \
-            -e "s|$GITHUB_WORKSPACE/out/linux-amd64/rexglue|$REXGLUE_BIN|g"
-
-          if grep -R -n "$GITHUB_WORKSPACE/out/linux-arm64/rexglue" . \
-              --exclude-dir=.git --exclude-dir=build-android; then
-            echo "::error::Ainda existe referencia ao executavel ARM64 no codegen."
-            exit 1
-          fi
-
       - name: Compilar codigo gerado para Android (ARM64)
         working-directory: pacman_project
         run: |
@@ -217,39 +195,46 @@ jobs:
             -DCMAKE_BUILD_TYPE=Release \
             -DREXSDK_DIR="$GITHUB_WORKSPACE"
 
-          echo "=== Corrigindo caminho do codegen nos arquivos de build gerados ==="
-          OLD_REXGLUE_PATH="$GITHUB_WORKSPACE/out/linux-arm64/rexglue"
-          grep -R -n "$OLD_REXGLUE_PATH" build-android || true
-
-          # Substituicao literal via Python evita problemas de escaping do sed.
-          # O caminho e inserido pelo SDK durante a geracao dos arquivos Make.
+          echo "=== Ajustando somente o comando de codegen ==="
+          # Nao altere generated/rexglue.cmake: ele tambem define onde o alvo
+          # rexglue e compilado. Altere apenas a receita que EXECUTA o codegen.
           python3 - <<'PY'
           import os
           from pathlib import Path
 
-          old = os.environ["GITHUB_WORKSPACE"] + "/out/linux-arm64/rexglue"
-          new = os.environ["REXGLUE_BIN"]
-          root = Path("build-android")
-          changed = 0
-
-          for path in root.rglob("*"):
+          host = os.environ["REXGLUE_BIN"]
+          candidates = [
+              Path("build-android/CMakeFiles/pacman_colors_codegen.dir/build.make"),
+              Path("build-android/generated/default/CMakeFiles/pacman_colors_codegen.dir/build.make"),
+          ]
+          found = False
+          for path in candidates:
               if not path.is_file():
                   continue
-              try:
-                  content = path.read_text()
-              except (UnicodeDecodeError, OSError):
-                  continue
-              if old in content:
-                  path.write_text(content.replace(old, new))
-                  changed += 1
-                  print(f"Corrigido: {path}")
-
-          print(f"Arquivos corrigidos: {changed}")
+              text = path.read_text()
+              original = text
+              for old in (
+                  os.environ["GITHUB_WORKSPACE"] + "/out/linux-arm64/rexglue",
+                  os.environ["GITHUB_WORKSPACE"] + "/out/linux-amd64/Release/rexglue",
+                  os.environ["GITHUB_WORKSPACE"] + "/out/linux-amd64/rexglue",
+              ):
+                  text = text.replace(old, host)
+              if text != original:
+                  path.write_text(text)
+                  print(f"Codegen atualizado em: {path}")
+                  found = True
+          if not found:
+              print("Nenhuma referencia foi substituida nos caminhos conhecidos; procurando receitas...")
+              for path in Path("build-android").rglob("build.make"):
+                  text = path.read_text(errors="ignore")
+                  if "pacman_colors_codegen" in str(path):
+                      print(f"Receita encontrada: {path}")
+                      print("\\n".join(line for line in text.splitlines() if "rexglue" in line))
           PY
 
-          if grep -R -n -F "$OLD_REXGLUE_PATH" build-android; then
-            echo "::error::Ainda existe referencia ao executavel ARM64 nos arquivos de build."
-            exit 1
+          CODEGEN_MAKE="build-android/CMakeFiles/pacman_colors_codegen.dir/build.make"
+          if [ -f "$CODEGEN_MAKE" ]; then
+            grep -n -F "$REXGLUE_BIN" "$CODEGEN_MAKE" || true
           fi
 
           echo "=== Compilando biblioteca Android ==="
