@@ -45,8 +45,9 @@ bool build_b(BuilderContext& ctx) {
       break;
 
     case TargetKind::Unknown:
-      // Unknown target - fall back to range check
-      if (target >= ctx.fn.base() && target < ctx.fn.end()) {
+      // Only branch to an address backed by discovered code blocks. The overall
+      // function extent can include gaps, where no loc_* label is emitted.
+      if (ctx.fn.containsAddress(target)) {
         ctx.println("\tgoto loc_{:X};", target);
       } else {
         REXCODEGEN_WARN("Unresolved b target 0x{:08X} from 0x{:08X}", target, ctx.base);
