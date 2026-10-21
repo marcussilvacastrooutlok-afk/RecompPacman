@@ -387,14 +387,16 @@ inline bool isMMIOUpperBits(uint32_t imm) {
  */
 inline void emitBranchWithBoundsCheck(BuilderContext& ctx, uint32_t target,
                                       std::string_view condition, std::string_view instr_name) {
-  if (target < ctx.fn.base() || target >= ctx.fn.end()) {
-    REXCODEGEN_WARN("{} at {:X} branches outside function to {:X}", instr_name, ctx.base, target);
-    ctx.println("\tif ({}) {{ /* branch to 0x{:X} outside function */ return; }}", condition,
-                target);
-  } else {
+  // A function's address extent can include gaps where codegen emits no loc_* label.
+  // Only branch to addresses that the function scanner actually discovered.
+  if (ctx.fn.containsAddress(target)) {
     ctx.println("\tif ({}) goto loc_{:X};", condition, target);
-  }
-}
+  } else {
+    REXCODEGEN_WARN("{} at {:X} branches to undiscovered address {:X}", instr_name, ctx.base,
+                    target);
+    ctx.println("\tif ({}) {{ /* branch to undiscovered address 0x{:X} */ return; }}", condition,
+                target);
+  }}
 
 //=============================================================================
 // Vector EA Calculation Helpers
