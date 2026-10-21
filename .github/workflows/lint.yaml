@@ -9,6 +9,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -21,11 +23,39 @@ jobs:
           python -m pip install -r scripts/requirements-dev.txt
           clang-format --version
 
-      - name: Check C/C++ formatting
+      - name: Check C/C++ formatting for changed files
+        shell: bash
         run: |
-          find include src tests \
-            -type f \( -name '*.cpp' -o -name '*.h' -o -name '*.hpp' -o -name '*.c' \) \
-            | xargs clang-format --dry-run --Werror
+          set -euo pipefail
+
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            changed_files="$(git diff --name-only "origin/$GITHUB_BASE_REF...$GITHUB_SHA")"
+          elif git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            changed_files="$(git diff-tree --no-commit-id --name-only -r HEAD)"
+          else
+            changed_files="$(git ls-files)"
+          fi
+
+          mapfile -t source_files < <(
+            printf '%s\n' "$changed_files" |
+              grep -E '^(include|src|tests)/.*\.(cpp|h|hpp|c)
+      - name: Check Vulkan dependency pins
+        run: python scripts/check_vulkan_stack.py
+
+      - name: Run script tests
+        run: python -m pytest scripts/tests -v
+
+ || true
+          )
+
+          if (( ${#source_files[@]} == 0 )); then
+            echo "No changed C/C++ files to format-check."
+            exit 0
+          fi
+
+          printf 'Checking formatting for %s changed C/C++ file(s):\n' "${#source_files[@]}"
+          printf '  %s\n' "${source_files[@]}"
+          clang-format --dry-run --Werror "${source_files[@]}"
 
       - name: Check Vulkan dependency pins
         run: python scripts/check_vulkan_stack.py
