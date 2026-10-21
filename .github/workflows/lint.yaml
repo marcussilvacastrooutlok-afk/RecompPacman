@@ -38,14 +38,7 @@ jobs:
 
           mapfile -t source_files < <(
             printf '%s\n' "$changed_files" |
-              grep -E '^(include|src|tests)/.*\.(cpp|h|hpp|c)
-      - name: Check Vulkan dependency pins
-        run: python scripts/check_vulkan_stack.py
-
-      - name: Run script tests
-        run: python -m pytest scripts/tests -v
-
- || true
+              grep -E '^(include|src|tests)/.*\.(cpp|h|hpp|c)$' || true
           )
 
           if (( ${#source_files[@]} == 0 )); then
@@ -62,4 +55,3 @@ jobs:
 
       - name: Run script tests
         run: python -m pytest scripts/tests -v
-
