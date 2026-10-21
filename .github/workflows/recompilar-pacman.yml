@@ -111,9 +111,16 @@ jobs:
             exit 1
           fi
 
+          # Preserve uma copia host-only: o build Android pode sobrescrever
+          # out/linux-amd64/rexglue com um binario ARM64.
+          mkdir -p "$GITHUB_WORKSPACE/host-tools"
+          cp "$REXGLUE_BIN" "$GITHUB_WORKSPACE/host-tools/rexglue"
+          chmod +x "$GITHUB_WORKSPACE/host-tools/rexglue"
+          REXGLUE_BIN="$GITHUB_WORKSPACE/host-tools/rexglue"
           echo "REXGLUE_BIN=$REXGLUE_BIN" >> "$GITHUB_ENV"
 
-          echo "=== Versao e ajuda do ReXGlue ==="
+          echo "=== Versao e ajuda do ReXGlue (host x86-64) ==="
+          file "$REXGLUE_BIN"
           "$REXGLUE_BIN" --help
 
       - name: Inicializar projeto Pac-Man
@@ -189,7 +196,9 @@ jobs:
             \( -name 'CMakeLists.txt' -o -name '*.cmake' -o -name '*.txt' \) \
             -not -path './build-android/*' -print0 |
             xargs -0 -r sed -i \
-              "s|$GITHUB_WORKSPACE/out/linux-arm64/rexglue|$REXGLUE_BIN|g"
+              -e "s|$GITHUB_WORKSPACE/out/linux-arm64/rexglue|$REXGLUE_BIN|g" \
+            -e "s|$GITHUB_WORKSPACE/out/linux-amd64/Release/rexglue|$REXGLUE_BIN|g" \
+            -e "s|$GITHUB_WORKSPACE/out/linux-amd64/rexglue|$REXGLUE_BIN|g"
 
           if grep -R -n "$GITHUB_WORKSPACE/out/linux-arm64/rexglue" . \
               --exclude-dir=.git --exclude-dir=build-android; then
