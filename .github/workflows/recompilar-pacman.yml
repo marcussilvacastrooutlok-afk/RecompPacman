@@ -240,13 +240,33 @@ jobs:
           echo "=== Compilando biblioteca Android ==="
           cmake --build build-android --config Release
 
-      - name: Salvar diagnosticos
+      - name: Preparar diagnosticos compactos
+        if: always()
+        run: |
+          mkdir -p diagnosticos
+          echo "Run: $GITHUB_RUN_ID" > diagnosticos/resumo.txt
+          echo "Commit: $GITHUB_SHA" >> diagnosticos/resumo.txt
+          if [ -f pacman_project/generated/default/pacman_colors_recomp.205.cpp ]; then
+            SOURCE="pacman_project/generated/default/pacman_colors_recomp.205.cpp"
+            echo "Arquivo que falhou: $SOURCE" >> diagnosticos/resumo.txt
+            grep -n -B 25 -A 25 -F "loc_82AF498C" "$SOURCE" > diagnosticos/erro-label.txt || true
+            cp "$SOURCE" diagnosticos/pacman_colors_recomp.205.cpp
+          fi
+          for file in \
+            pacman_project/CMakeLists.txt \
+            pacman_project/build-android/CMakeCache.txt \
+            pacman_project/build-android/CMakeFiles/pacman_colors_recomp.dir/build.make; do
+            if [ -f "$file" ]; then
+              cp --parents "$file" diagnosticos/
+            fi
+          done
+          find diagnosticos -type f -printf '%p %s bytes\\n' >> diagnosticos/resumo.txt
+
+      - name: Salvar diagnosticos compactos
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: diagnostico-pacman
-          path: |
-            pacman_project/
-            out/
+          path: diagnosticos/
           if-no-files-found: ignore
           retention-days: 7
