@@ -396,7 +396,8 @@ inline void emitBranchWithBoundsCheck(BuilderContext& ctx, uint32_t target,
                     target);
     ctx.println("\tif ({}) {{ /* branch to undiscovered address 0x{:X} */ return; }}", condition,
                 target);
-  }}
+  }
+}
 
 //=============================================================================
 // Vector EA Calculation Helpers
