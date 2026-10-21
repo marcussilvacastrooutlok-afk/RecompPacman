@@ -2,6 +2,9 @@ name: Recompilar Pac-Man para Android
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -204,6 +207,21 @@ jobs:
             -DANDROID_PLATFORM=android-26 \
             -DCMAKE_BUILD_TYPE=Release \
             -DREXSDK_DIR="$GITHUB_WORKSPACE"
+
+          echo "=== Corrigindo caminho do codegen nos arquivos de build gerados ==="
+          OLD_REXGLUE_PATH="$GITHUB_WORKSPACE/out/linux-arm64/rexglue"
+          grep -R -n "$OLD_REXGLUE_PATH" build-android || true
+
+          # O CMake injeta o caminho incorreto ao gerar build.make.
+          # Corrigir depois da configuracao e antes de executar o build.
+          find build-android -type f \
+            \( -name 'build.make' -o -name 'Makefile' -o -name 'build.ninja' -o -name '*.cmake' \) \
+            -print0 | xargs -0 -r sed -i "s|$OLD_REXGLUE_PATH|$REXGLUE_BIN|g"
+
+          if grep -R -n "$OLD_REXGLUE_PATH" build-android; then
+            echo "::error::Ainda existe referencia ao executavel ARM64 nos arquivos de build."
+            exit 1
+          fi
 
           echo "=== Compilando biblioteca Android ==="
           cmake --build build-android --config Release
