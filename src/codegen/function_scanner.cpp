@@ -1869,6 +1869,22 @@ BlockDiscoveryResult discoverBlocks(
       if (isBranch(*insn)) {
         auto target = getBranchTarget(*insn);
 
+        // PDATA normally bounds a function, but Xbox 360 binaries can place
+        // out-of-line local blocks beyond that extent. A direct non-call branch
+        // to executable code in the same code region, with no known function
+        // entry at the target, is stronger evidence than the PDATA size.
+        // Fall back to region-based discovery so the target block and its
+        // successors are discovered instead of emitting a goto to a missing label.
+        if (target && !isCall(*insn) && pdataSize > 0 && *target >= funcEnd &&
+            *target >= containingRegion.start && *target < containingRegion.end &&
+            !knownFunctions.contains(*target)) {
+          REXCODEGEN_WARN(
+              "discoverBlocks: local branch target 0x{:08X} from 0x{:08X} exceeds PDATA "
+              "extent ending at 0x{:08X}; extending discovery to code-region boundary 0x{:08X}",
+              *target, addr, funcEnd, containingRegion.end);
+          funcEnd = containingRegion.end;
+        }
+
         // Helper: check if target is internal to this function
         // Uses funcEnd (from pdataSize or region) defined at top of function
         auto isInternalTarget = [&](uint32_t t) -> bool {
