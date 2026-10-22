@@ -103,6 +103,7 @@ rex_target_pch(rexui <rex/math.h>)
 
 target_include_directories(rexui PUBLIC
     $<BUILD_INTERFACE:${REXGLUE_ROOT}/include>
+    $<BUILD_INTERFACE:${REXGLUE_ROOT}/thirdparty/imgui>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 target_include_directories(rexui PRIVATE
