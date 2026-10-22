@@ -163,7 +163,7 @@ jobs:
           if not cmake_file.is_file():
               raise SystemExit("CMakeLists.txt do projeto gerado não foi encontrado")
           text = cmake_file.read_text()
-          fix = '\\ntarget_include_directories(pacman_colors PRIVATE "${REXSDK_DIR}/thirdparty/imgui")\\n'
+          fix = '\ntarget_include_directories(pacman_colors PRIVATE "${REXSDK_DIR}/thirdparty/imgui")\n'
           if "target_include_directories(pacman_colors PRIVATE" not in text:
               cmake_file.write_text(text.rstrip() + fix)
           print("Include do Dear ImGui configurado para o alvo pacman_colors.")
