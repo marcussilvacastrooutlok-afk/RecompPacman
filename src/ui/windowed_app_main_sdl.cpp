@@ -55,7 +55,23 @@ int RunWindowedApp(int argc, char** argv) {
     }
 #endif
 
+#if REX_PLATFORM_ANDROID
+#ifndef REX_ANDROID_APP_IDENTIFIER
+#error "REX_ANDROID_APP_IDENTIFIER must name the app registered in the Android library"
+#endif
+    const auto creator = rex::ui::WindowedApp::GetCreator(REX_ANDROID_APP_IDENTIFIER);
+    if (!creator) {
+      rex::Fatal("No Android app creator registered for identifier: " REX_ANDROID_APP_IDENTIFIER);
+      return EXIT_FAILURE;
+    }
+    std::unique_ptr<rex::ui::WindowedApp> app = creator(app_context);
+#else
     std::unique_ptr<rex::ui::WindowedApp> app = rex::ui::GetWindowedAppCreator()(app_context);
+#endif
+    if (!app) {
+      rex::Fatal("Windowed app creator returned null");
+      return EXIT_FAILURE;
+    }
 
     // Match remaining positional args to the app's expected options.
     const auto& option_names = app->GetPositionalOptions();
