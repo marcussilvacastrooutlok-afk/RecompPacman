@@ -166,21 +166,15 @@ jobs:
           fix = '\ntarget_include_directories(pacman_colors PRIVATE "${REXSDK_DIR}/thirdparty/imgui")\n'
           if "target_include_directories(pacman_colors PRIVATE" not in text:
               cmake_file.write_text(text.rstrip() + fix)
-          print("Include do Dear ImGui configurado para o alvo pacman_colors.")
           # Seleciona explicitamente o app registrado na biblioteca Android.
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path("pacman_project/CMakeLists.txt")
-          s = p.read_text()
           line = 'target_compile_definitions(pacman_colors PRIVATE REX_ANDROID_APP_IDENTIFIER="pacman_colors")'
-          if line not in s:
+          if line not in text:
               anchor = 'rexglue_setup_target(pacman_colors)'
-              if anchor not in s:
+              if anchor not in text:
                   raise SystemExit("Não encontrei rexglue_setup_target(pacman_colors)")
-              s = s.replace(anchor, line + "\\n" + anchor, 1)
-              p.write_text(s)
-          print("Identificador Android pacman_colors configurado.")
-          PY
+              text = text.replace(anchor, line + "\n" + anchor, 1)
+              cmake_file.write_text(text)
+          print("Include e identificador Android do Pac-Man configurados.")
           PY
 
       - name: Verificar Android NDK
