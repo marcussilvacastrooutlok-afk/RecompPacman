@@ -154,7 +154,7 @@ jobs:
           echo "Configuracao encontrada: $CONFIG"
           "$REXGLUE_BIN" --force codegen "$CONFIG"
 
-      - name: Corrigir include do Dear ImGui no projeto gerado
+      - name: Corrigir includes e identificador Android no projeto gerado
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -162,19 +162,25 @@ jobs:
           cmake_file = Path("pacman_project/CMakeLists.txt")
           if not cmake_file.is_file():
               raise SystemExit("CMakeLists.txt do projeto gerado não foi encontrado")
+
           text = cmake_file.read_text()
-          fix = '\ntarget_include_directories(pacman_colors PRIVATE "${REXSDK_DIR}/thirdparty/imgui")\n'
-          if "target_include_directories(pacman_colors PRIVATE" not in text:
-              cmake_file.write_text(text.rstrip() + fix)
-          # Seleciona explicitamente o app registrado na biblioteca Android.
-          line = 'target_compile_definitions(pacman_colors PRIVATE REX_ANDROID_APP_IDENTIFIER="pacman_colors")'
-          if line not in text:
-              anchor = 'rexglue_setup_target(pacman_colors)'
-              if anchor not in text:
-                  raise SystemExit("Não encontrei rexglue_setup_target(pacman_colors)")
-              text = text.replace(anchor, line + "\n" + anchor, 1)
+          additions = [
+              'target_include_directories(pacman_colors PRIVATE "${REXSDK_DIR}/thirdparty/imgui")',
+              'target_compile_definitions(pacman_colors PRIVATE REX_ANDROID_APP_IDENTIFIER="pacman_colors")',
+          ]
+          anchor = "rexglue_setup_target(pacman_colors)"
+          if anchor not in text:
+              raise SystemExit("Não encontrei rexglue_setup_target(pacman_colors)")
+
+          # Inserir as duas configurações numa única gravação, sem perder
+          # alterações anteriores por reutilizar uma cópia antiga do texto.
+          missing = [line for line in additions if line not in text]
+          if missing:
+              text = text.replace(anchor, "\\n".join(missing) + "\\n" + anchor, 1)
               cmake_file.write_text(text)
-          print("Include e identificador Android do Pac-Man configurados.")
+
+          print("Includes do ImGui e identificador Android verificados.")
+          print(cmake_file.read_text())
           PY
 
       - name: Verificar Android NDK
