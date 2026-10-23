@@ -34,8 +34,6 @@
 #include <shellapi.h>
 #endif
 
-#if !REX_PLATFORM_ANDROID
-
 namespace {
 
 int RunWindowedApp(int argc, char** argv) {
@@ -104,7 +102,16 @@ std::vector<std::string> WideArgsToUtf8(int argc, wchar_t** wargv) {
 
 }  // namespace
 
-#if REX_PLATFORM_WIN32
+#if REX_PLATFORM_ANDROID
+
+// SDL3's Android activity looks for SDL_main in the app's native library.
+// Keep the shared application startup path, but expose SDL's Android entrypoint
+// instead of the desktop main symbol.
+extern "C" int SDL_main(int argc, char* argv[]) {
+  return RunWindowedApp(argc, argv);
+}
+
+#elif REX_PLATFORM_WIN32
 
 int WINAPI wWinMain(HINSTANCE hinstance, HINSTANCE hinstance_prev, LPWSTR command_line,
                     int show_cmd) {
@@ -133,5 +140,3 @@ int main(int argc, char* argv[]) {
 }
 
 #endif
-
-#endif  // !REX_PLATFORM_ANDROID
