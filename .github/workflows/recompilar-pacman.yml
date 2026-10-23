@@ -176,7 +176,7 @@ jobs:
           # alterações anteriores por reutilizar uma cópia antiga do texto.
           missing = [line for line in additions if line not in text]
           if missing:
-              text = text.replace(anchor, "\\n".join(missing) + "\\n" + anchor, 1)
+              text = text.replace(anchor, "\n".join(missing) + "\n" + anchor, 1)
               cmake_file.write_text(text)
 
           print("Includes do ImGui e identificador Android verificados.")
