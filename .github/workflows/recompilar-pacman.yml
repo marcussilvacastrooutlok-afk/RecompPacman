@@ -269,6 +269,13 @@ jobs:
           echo "=== Compilando biblioteca Android ==="
           cmake --build build-android --config Release
 
+      - name: Configurar Java 17 para Gradle Android
+        if: success()
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Empacotar APK Android com SDL3
         if: success()
         working-directory: pacman_project
