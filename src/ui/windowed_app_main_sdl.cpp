@@ -34,6 +34,8 @@
 #include <shellapi.h>
 #endif
 
+#if !REX_PLATFORM_ANDROID
+
 namespace {
 
 int RunWindowedApp(int argc, char** argv) {
@@ -131,3 +133,5 @@ int main(int argc, char* argv[]) {
 }
 
 #endif
+
+#endif  // !REX_PLATFORM_ANDROID
