@@ -15,7 +15,12 @@ set({{ names.upper_case }}_SOURCES
     src/main.cpp
 )
 
-if(WIN32)
+if(ANDROID)
+    # SDL3's Android Activity loads the application's native entrypoint as
+    # libmain.so. The entrypoint is SDL_main, provided by the ReXGlue SDL shim.
+    add_library({{ names.snake_case }} SHARED {{ cmake_var(names.upper_case + "_SOURCES") }})
+    set_target_properties({{ names.snake_case }} PROPERTIES OUTPUT_NAME "main")
+elseif(WIN32)
     add_executable({{ names.snake_case }} WIN32 {{ cmake_var(names.upper_case + "_SOURCES") }})
 else()
     add_executable({{ names.snake_case }} {{ cmake_var(names.upper_case + "_SOURCES") }})
