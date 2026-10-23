@@ -305,7 +305,7 @@ jobs:
           sed -i 's/android:label="@string\/app_name"/android:label="Pac-Man Recompiled"/' android-package/app/src/main/AndroidManifest.xml
           cd android-package
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug -PEXCLUDE_NATIVE_LIBS
+          ./gradlew --no-daemon assembleDebug
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           mkdir -p ../dist/android-apk
