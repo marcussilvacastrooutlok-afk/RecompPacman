@@ -313,7 +313,13 @@ jobs:
           cp "$MAIN_LIB" "$RUNNER_TEMP/apk-replace/lib/arm64-v8a/libmain.so"
           (cd "$RUNNER_TEMP/apk-replace" && zip -q -u "$GITHUB_WORKSPACE/pacman_project/android-package/$APK" lib/arm64-v8a/libmain.so)
 
-          cp "$APK" ../dist/android-apk/pacman-android-arm64-debug.apk
+          # Reassinar o APK depois de alterar a biblioteca nativa.
+          BUILD_TOOLS_DIR="$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
+          test -x "$BUILD_TOOLS_DIR/zipalign"
+          test -x "$BUILD_TOOLS_DIR/apksigner"
+          "$BUILD_TOOLS_DIR/zipalign" -f -p 4 "$APK" "$RUNNER_TEMP/pacman-aligned.apk"
+          "$BUILD_TOOLS_DIR/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android --key-pass pass:android --out ../dist/android-apk/pacman-android-arm64-debug.apk "$RUNNER_TEMP/pacman-aligned.apk"
+          "$BUILD_TOOLS_DIR/apksigner" verify --verbose ../dist/android-apk/pacman-android-arm64-debug.apk
           echo "APK criado:"
           ls -lh ../dist/android-apk/pacman-android-arm64-debug.apk
           echo "Bibliotecas ARM64 incluídas:"
