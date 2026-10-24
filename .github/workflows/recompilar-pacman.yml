@@ -311,7 +311,21 @@ jobs:
 
           mkdir -p "$RUNNER_TEMP/apk-replace/lib/arm64-v8a"
           cp "$MAIN_LIB" "$RUNNER_TEMP/apk-replace/lib/arm64-v8a/libmain.so"
-          (cd "$RUNNER_TEMP/apk-replace" && zip -q -u "$GITHUB_WORKSPACE/pacman_project/android-package/$APK" lib/arm64-v8a/libmain.so)
+
+          # libmain.so links against the ReXGlue runtime and Xenos GPU plugin.
+          # Bundle both ARM64 shared libraries beside libmain.so so Android's
+          # linker can resolve their DT_NEEDED entries at application startup.
+          for LIB in librexruntime.so librexgpu-xenos.so; do
+            SOURCE="$GITHUB_WORKSPACE/out/linux-arm64/$LIB"
+            if [ ! -s "$SOURCE" ]; then
+              echo "::error::Required Android library not found: $SOURCE"
+              find "$GITHUB_WORKSPACE/out" -type f -name "$LIB" -print || true
+              exit 1
+            fi
+            cp "$SOURCE" "$RUNNER_TEMP/apk-replace/lib/arm64-v8a/$LIB"
+          done
+
+          (cd "$RUNNER_TEMP/apk-replace" && zip -q -u "$GITHUB_WORKSPACE/pacman_project/android-package/$APK" lib/arm64-v8a/libmain.so lib/arm64-v8a/librexruntime.so lib/arm64-v8a/librexgpu-xenos.so)
 
           # Reassinar o APK depois de alterar a biblioteca nativa.
           BUILD_TOOLS_DIR="$(find "${ANDROID_HOME:-$ANDROID_SDK_ROOT}/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n 1)"
@@ -327,8 +341,10 @@ jobs:
           echo "APK criado:"
           ls -lh ../dist/android-apk/pacman-android-arm64-debug.apk
           echo "Bibliotecas ARM64 incluídas:"
-          unzip -l ../dist/android-apk/pacman-android-arm64-debug.apk | grep -E 'lib/arm64-v8a/lib(main|SDL3)\.so'
-          unzip -l ../dist/android-apk/pacman-android-arm64-debug.apk | grep -q 'lib/arm64-v8a/libSDL3\.so' || { echo "::error::libSDL3.so não foi incluída no APK."; exit 1; }
+          unzip -l ../dist/android-apk/pacman-android-arm64-debug.apk | grep -E 'lib/arm64-v8a/lib(main|SDL3|rexruntime|rexgpu-xenos)\.so'
+          for LIB in libSDL3.so libmain.so librexruntime.so librexgpu-xenos.so; do
+            unzip -l ../dist/android-apk/pacman-android-arm64-debug.apk | grep -q "lib/arm64-v8a/$LIB" || { echo "::error::$LIB não foi incluída no APK."; exit 1; }
+          done
 
       - name: Preparar diagnosticos compactos
         if: always()
