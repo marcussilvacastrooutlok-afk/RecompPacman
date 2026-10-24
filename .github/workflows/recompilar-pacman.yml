@@ -297,9 +297,11 @@ jobs:
             exit 1
           fi
 
-          # O Android Gradle plugin já recolhe libmain.so do target CMake
-          # via externalNativeBuild. Copiá-la também para jniLibs duplica
-          # o mesmo arquivo e faz mergeDebugNativeLibs falhar.
+          # O projeto SDL de exemplo contém um alvo nativo "YourSourceHere.c".
+          # Desabilite essa compilação de exemplo e empacote explicitamente a
+          # biblioteca libmain.so produzida pelo ReXGlue para evitar o Hello World do SDL.
+          cp "$MAIN_LIB" android-package/app/src/main/jniLibs/arm64-v8a/libmain.so
+
           SDL_LIB="$(find build-android "$RUNNER_TEMP/SDL" -type f -name 'libSDL3.so' -print -quit || true)"
           if [ -n "$SDL_LIB" ]; then
             cp "$SDL_LIB" android-package/app/src/main/jniLibs/arm64-v8a/libSDL3.so
@@ -311,7 +313,7 @@ jobs:
           sed -i 's/android:label="@string\/app_name"/android:label="Pac-Man Recompiled"/' android-package/app/src/main/AndroidManifest.xml
           cd android-package
           chmod +x gradlew
-          ./gradlew --no-daemon assembleDebug
+          ./gradlew --no-daemon -PEXCLUDE_NATIVE_LIBS assembleDebug
           APK="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$APK"
           mkdir -p ../dist/android-apk
