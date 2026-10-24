@@ -284,6 +284,10 @@ jobs:
           git clone --depth 1 --branch release-3.4.x https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
           mkdir -p android-package
           cp -a "$RUNNER_TEMP/SDL/android-project/." android-package/
+          # O Android.mk importa o modulo SDL3 pelo caminho jni/SDL.
+          # Copiar apenas android-project deixa esse modulo ausente no NDK r28.
+          mkdir -p android-package/app/jni
+          cp -a "$RUNNER_TEMP/SDL" android-package/app/jni/SDL
           mkdir -p android-package/app/src/main/jniLibs/arm64-v8a
 
           MAIN_LIB="$(find build-android -type f -name 'libmain.so' -print -quit)"
