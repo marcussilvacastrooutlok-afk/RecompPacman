@@ -294,20 +294,13 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p = Path("android-package/app/build.gradle")
-          s = p.read_text()
-          old = '''    applicationVariants.all { variant ->
-          tasks["merge${variant.name.capitalize()}Assets"]
-              .dependsOn("externalNativeBuild${variant.name.capitalize()}")
-      }'''
-          new = '''    if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
-          applicationVariants.all { variant ->
-              tasks["merge${variant.name.capitalize()}Assets"]
-                  .dependsOn("externalNativeBuild${variant.name.capitalize()}")
-          }
-      }'''
-          if old not in s:
-              raise SystemExit("Nao encontrei a dependencia externalNativeBuild no build.gradle do SDL")
-          p.write_text(s.replace(old, new, 1))
+          lines = p.read_text().splitlines()
+          start = next(i for i, line in enumerate(lines) if "applicationVariants.all { variant ->" in line)
+          dep = next(i for i in range(start, len(lines)) if '.dependsOn("externalNativeBuild' in lines[i])
+          end = next(i for i in range(dep + 1, len(lines)) if lines[i].strip() == "}")
+          lines[start] = "    if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {"
+          lines.insert(end + 1, "    }")
+          p.write_text("\\n".join(lines) + "\\n")
           PY
           mkdir -p android-package/app/src/main/jniLibs/arm64-v8a
 
