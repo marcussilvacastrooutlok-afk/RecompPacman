@@ -296,8 +296,10 @@ jobs:
             find build-android -type f -name '*.so' -print || true
             exit 1
           fi
-          cp "$MAIN_LIB" android-package/app/src/main/jniLibs/arm64-v8a/libmain.so
 
+          # O Android Gradle plugin já recolhe libmain.so do target CMake
+          # via externalNativeBuild. Copiá-la também para jniLibs duplica
+          # o mesmo arquivo e faz mergeDebugNativeLibs falhar.
           SDL_LIB="$(find build-android "$RUNNER_TEMP/SDL" -type f -name 'libSDL3.so' -print -quit || true)"
           if [ -n "$SDL_LIB" ]; then
             cp "$SDL_LIB" android-package/app/src/main/jniLibs/arm64-v8a/libSDL3.so
