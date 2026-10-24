@@ -290,7 +290,7 @@ jobs:
           mkdir -p android-package/app/jni
           cp -a "$RUNNER_TEMP/SDL" android-package/app/jni/SDL
 
-          MAIN_LIB="$(find build-android "$GITHUB_WORKSPACE/out/linux-arm64" -type f -name 'libmain.so' -print -quit 2>/dev/null || true)"
+          MAIN_LIB="$(find "$GITHUB_WORKSPACE/pacman_project/build-android" "$GITHUB_WORKSPACE/out/linux-arm64" -type f -name 'libmain.so' -print -quit 2>/dev/null || true)"
           if [ -z "$MAIN_LIB" ]; then
             echo "::error::A biblioteca libmain.so do Pac-Man não foi gerada."
             find build-android -type f -name '*.so' -print || true
