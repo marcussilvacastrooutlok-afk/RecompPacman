@@ -23,7 +23,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget ca-certificates
+          sudo apt-get install -y wget ca-certificates python3-pil
 
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -284,6 +284,45 @@ jobs:
           git clone --depth 1 --branch release-3.4.x https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
           mkdir -p android-package
           cp -a "$RUNNER_TEMP/SDL/android-project/." android-package/
+          # Substituir o ícone padrão do SDL por um ícone próprio do Pac-Man.
+          # Gerar PNGs nos tamanhos de cada densidade Android usando Pillow.
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageDraw
+          import math
+
+          res = Path("android-package/app/src/main/res")
+          sizes = {"mipmap-mdpi": 48, "mipmap-hdpi": 72, "mipmap-xhdpi": 96,
+                   "mipmap-xxhdpi": 144, "mipmap-xxxhdpi": 192}
+          found = False
+          for folder, size in sizes.items():
+              directory = res / folder
+              if not directory.is_dir():
+                  continue
+              for name in ("ic_launcher.png", "ic_launcher_round.png"):
+                  path = directory / name
+                  if not path.exists():
+                      continue
+                  image = Image.new("RGBA", (size, size), (16, 24, 40, 255))
+                  draw = ImageDraw.Draw(image)
+                  margin = size * 0.10
+                  box = (margin, margin, size - margin, size - margin)
+                  draw.ellipse(box, fill=(255, 214, 10, 255))
+                  # Boca triangular preta, estilo clássico do Pac-Man.
+                  cx, cy = size * 0.52, size * 0.50
+                  radius = size * 0.40
+                  points = [(cx, cy),
+                            (cx + radius * math.cos(math.radians(-28)),
+                             cy + radius * math.sin(math.radians(-28))),
+                            (cx + radius * math.cos(math.radians(28)),
+                             cy + radius * math.sin(math.radians(28)))]
+                  draw.polygon(points, fill=(16, 24, 40, 255))
+                  image.save(path)
+                  print(f"Ícone Pac-Man gerado: {path} ({size}x{size})")
+                  found = True
+          if not found:
+              raise SystemExit("Não encontrei ic_launcher.png nas pastas mipmap do projeto SDL")
+          PY
           # O projeto Android do SDL deve compilar a biblioteca compartilhada libSDL3.so,
           # que a Activity carrega com System.loadLibrary("SDL3"). Não desabilite
           # externalNativeBuild: isso deixava o APK sem libSDL3.so.
