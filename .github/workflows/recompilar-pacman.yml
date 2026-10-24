@@ -318,7 +318,11 @@ jobs:
           test -x "$BUILD_TOOLS_DIR/zipalign"
           test -x "$BUILD_TOOLS_DIR/apksigner"
           "$BUILD_TOOLS_DIR/zipalign" -f -p 4 "$APK" "$RUNNER_TEMP/pacman-aligned.apk"
-          "$BUILD_TOOLS_DIR/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android --key-pass pass:android --out ../dist/android-apk/pacman-android-arm64-debug.apk "$RUNNER_TEMP/pacman-aligned.apk"
+          mkdir -p "$HOME/.android"
+          if [ ! -s "$HOME/.android/debug.keystore" ]; then
+            keytool -genkeypair -keystore "$HOME/.android/debug.keystore" -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          "$BUILD_TOOLS_DIR/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-pass pass:android --ks-key-alias androiddebugkey --key-pass pass:android --out ../dist/android-apk/pacman-android-arm64-debug.apk "$RUNNER_TEMP/pacman-aligned.apk"
           "$BUILD_TOOLS_DIR/apksigner" verify --verbose ../dist/android-apk/pacman-android-arm64-debug.apk
           echo "APK criado:"
           ls -lh ../dist/android-apk/pacman-android-arm64-debug.apk
