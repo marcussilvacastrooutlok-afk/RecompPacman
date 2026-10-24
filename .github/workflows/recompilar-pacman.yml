@@ -349,8 +349,8 @@ jobs:
           else:
               if anchor_down not in text or anchor_up not in text:
                   raise SystemExit("As assinaturas SDL3 esperadas não foram encontradas; não é seguro aplicar o ajuste.")
-              text = text.replace(anchor_down, anchor_down + "\\n    " + required[0], 1)
-              text = text.replace(anchor_up, anchor_up + "\\n    " + required[1], 1)
+              text = text.replace(anchor_down, anchor_down + "\n    " + required[0], 1)
+              text = text.replace(anchor_up, anchor_up + "\n    " + required[1], 1)
               java.write_text(text)
               print("Adicionadas sobrecargas JNI de dois argumentos para o ReXGlue.")
           PY
