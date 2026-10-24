@@ -288,9 +288,30 @@ jobs:
           # Copiar apenas android-project deixa esse modulo ausente no NDK r28.
           mkdir -p android-package/app/jni
           cp -a "$RUNNER_TEMP/SDL" android-package/app/jni/SDL
+          # EXCLUDE_NATIVE_LIBS impede a compilacao do exemplo SDL. A receita
+          # do SDL ainda cria uma dependencia para externalNativeBuildDebug;
+          # remova essa dependencia quando usarmos as bibliotecas precompiladas.
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("android-package/app/build.gradle")
+          s = p.read_text()
+          old = '''    applicationVariants.all { variant ->
+          tasks["merge${variant.name.capitalize()}Assets"]
+              .dependsOn("externalNativeBuild${variant.name.capitalize()}")
+      }'''
+          new = '''    if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {
+          applicationVariants.all { variant ->
+              tasks["merge${variant.name.capitalize()}Assets"]
+                  .dependsOn("externalNativeBuild${variant.name.capitalize()}")
+          }
+      }'''
+          if old not in s:
+              raise SystemExit("Nao encontrei a dependencia externalNativeBuild no build.gradle do SDL")
+          p.write_text(s.replace(old, new, 1))
+          PY
           mkdir -p android-package/app/src/main/jniLibs/arm64-v8a
 
-          MAIN_LIB="$(find build-android -type f -name 'libmain.so' -print -quit)"
+          MAIN_LIB="$(find build-android "$GITHUB_WORKSPACE/out/linux-arm64" -type f -name 'libmain.so' -print -quit 2>/dev/null || true)"
           if [ -z "$MAIN_LIB" ]; then
             echo "::error::A biblioteca libmain.so do Pac-Man não foi gerada."
             find build-android -type f -name '*.so' -print || true
@@ -302,7 +323,7 @@ jobs:
           # biblioteca libmain.so produzida pelo ReXGlue para evitar o Hello World do SDL.
           cp "$MAIN_LIB" android-package/app/src/main/jniLibs/arm64-v8a/libmain.so
 
-          SDL_LIB="$(find build-android "$RUNNER_TEMP/SDL" -type f -name 'libSDL3.so' -print -quit || true)"
+          SDL_LIB="$(find build-android "$GITHUB_WORKSPACE/out/linux-arm64" "$RUNNER_TEMP/SDL" -type f -name 'libSDL3.so' -print -quit 2>/dev/null || true)"
           if [ -n "$SDL_LIB" ]; then
             cp "$SDL_LIB" android-package/app/src/main/jniLibs/arm64-v8a/libSDL3.so
           elif readelf -d "$MAIN_LIB" | grep -q 'libSDL3.so'; then
