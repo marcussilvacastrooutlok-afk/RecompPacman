@@ -300,7 +300,7 @@ jobs:
           end = next(i for i in range(dep + 1, len(lines)) if lines[i].strip() == "}")
           lines[start] = "    if (!project.hasProperty('EXCLUDE_NATIVE_LIBS')) {"
           lines.insert(end + 1, "    }")
-          p.write_text("\\n".join(lines) + "\\n")
+          p.write_text("\n".join(lines) + "\n")
           PY
           mkdir -p android-package/app/src/main/jniLibs/arm64-v8a
 
