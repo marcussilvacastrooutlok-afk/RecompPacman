@@ -329,6 +329,32 @@ jobs:
           mkdir -p android-package/app/jni
           cp -a "$RUNNER_TEMP/SDL" android-package/app/jni/SDL
 
+          # ReXGlue's JNI_OnLoad expects the SDL controller callbacks with
+          # the two-argument SDL3-era signature (II)Z. SDL 3.4.x uses the
+          # newer three-argument signatures (III)Z, so retain overloads for
+          # the runtime's registered callbacks while keeping SDL3's methods.
+          python3 - <<'PY'
+          from pathlib import Path
+
+          java = Path("android-package/app/src/main/java/org/libsdl/app/SDLControllerManager.java")
+          text = java.read_text()
+          anchor_down = "static public native boolean onNativePadDown(int device_id, int keycode, int scancode);"
+          anchor_up = "static public native boolean onNativePadUp(int device_id, int keycode, int scancode);"
+          required = [
+              "static public native boolean onNativePadDown(int device_id, int keycode);",
+              "static public native boolean onNativePadUp(int device_id, int keycode);",
+          ]
+          if all(line in text for line in required):
+              print("Compatibilidade JNI SDL/ReXGlue já presente.")
+          else:
+              if anchor_down not in text or anchor_up not in text:
+                  raise SystemExit("As assinaturas SDL3 esperadas não foram encontradas; não é seguro aplicar o ajuste.")
+              text = text.replace(anchor_down, anchor_down + "\\n    " + required[0], 1)
+              text = text.replace(anchor_up, anchor_up + "\\n    " + required[1], 1)
+              java.write_text(text)
+              print("Adicionadas sobrecargas JNI de dois argumentos para o ReXGlue.")
+          PY
+
           MAIN_LIB="$(find "$GITHUB_WORKSPACE/pacman_project/build-android" "$GITHUB_WORKSPACE/out/linux-arm64" -type f -name 'libmain.so' -print -quit 2>/dev/null || true)"
           if [ -z "$MAIN_LIB" ]; then
             echo "::error::A biblioteca libmain.so do Pac-Man não foi gerada."
