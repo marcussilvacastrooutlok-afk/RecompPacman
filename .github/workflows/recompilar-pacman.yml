@@ -340,7 +340,7 @@ jobs:
           text = java.read_text()
           anchor_down = "static public native boolean onNativePadDown(int device_id, int keycode, int scancode);"
           anchor_up = "static public native boolean onNativePadUp(int device_id, int keycode, int scancode);"
-          joystick_legacy = "static native void nativeAddJoystick(int device_id, String name, String desc, int vendor_id, int product_id, int button_mask, int naxes, int axis_mask, boolean can_rumble, boolean has_rgb_led);"
+          joystick_legacy = "static native void nativeAddJoystick(int device_id, String name, String desc, int vendor_id, int product_id, int button_mask, int naxes, int axis_mask, int nhats, boolean can_rumble, boolean has_rgb_led);"
           if anchor_down not in text or anchor_up not in text or "static native void nativeRemoveJoystick(int device_id);" not in text:
               raise SystemExit("As assinaturas SDL3 esperadas não foram encontradas; não é seguro aplicar o ajuste.")
           required = [
