@@ -281,7 +281,7 @@ jobs:
         working-directory: pacman_project
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch release-3.4.8 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          git clone --depth 1 --branch release-3.4.x https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
           mkdir -p android-package
           cp -a "$RUNNER_TEMP/SDL/android-project/." android-package/
           # Substituir o ícone padrão do SDL por um ícone próprio do Pac-Man.
@@ -329,10 +329,10 @@ jobs:
           mkdir -p android-package/app/jni
           cp -a "$RUNNER_TEMP/SDL" android-package/app/jni/SDL
 
-          # Pin SDL 3.4.8: its controller JNI signatures match the ReXGlue runtime
-          # (two-argument pad callbacks and two trailing joystick booleans).
-          # Avoid the moving release-3.4.x branch, which introduced newer JNI
-          # signatures and caused SDLControllerManager lookup to abort at startup.
+          # ReXGlue's native runtime reports SDL 3.5.0, so use the matching
+          # SDL Java/native source instead of mixing Java 3.4.8 with C 3.5.0.
+          # Add legacy JNI overloads expected by ReXGlue without removing the
+          # newer SDL 3.5.0 declarations.
           python3 - <<'PY'
           from pathlib import Path
 
@@ -340,19 +340,23 @@ jobs:
           text = java.read_text()
           anchor_down = "static public native boolean onNativePadDown(int device_id, int keycode, int scancode);"
           anchor_up = "static public native boolean onNativePadUp(int device_id, int keycode, int scancode);"
+          joystick_legacy = "static native void nativeAddJoystick(int device_id, String name, String desc, int vendor_id, int product_id, int button_mask, int naxes, int axis_mask, boolean can_rumble, boolean has_rgb_led);"
+          if anchor_down not in text or anchor_up not in text or "static native void nativeRemoveJoystick(int device_id);" not in text:
+              raise SystemExit("As assinaturas SDL3 esperadas não foram encontradas; não é seguro aplicar o ajuste.")
           required = [
               "static public native boolean onNativePadDown(int device_id, int keycode);",
               "static public native boolean onNativePadUp(int device_id, int keycode);",
+              joystick_legacy,
           ]
-          if all(line in text for line in required):
-              print("Compatibilidade JNI SDL/ReXGlue já presente.")
-          else:
-              if anchor_down not in text or anchor_up not in text:
-                  raise SystemExit("As assinaturas SDL3 esperadas não foram encontradas; não é seguro aplicar o ajuste.")
-              text = text.replace(anchor_down, anchor_down + "\n    " + required[0], 1)
-              text = text.replace(anchor_up, anchor_up + "\n    " + required[1], 1)
-              java.write_text(text)
-              print("Adicionadas sobrecargas JNI de dois argumentos para o ReXGlue.")
+          if required[0] not in text:
+              text = text.replace(anchor_down, anchor_down + "\\n    " + required[0], 1)
+          if required[1] not in text:
+              text = text.replace(anchor_up, anchor_up + "\\n    " + required[1], 1)
+          if joystick_legacy not in text:
+              anchor = "    static native void nativeRemoveJoystick(int device_id);"
+              text = text.replace(anchor, "    " + joystick_legacy + "\\n" + anchor, 1)
+          java.write_text(text)
+          print("Versão SDL 3.5.0 e sobrecargas JNI compatíveis configuradas.")
           PY
 
           MAIN_LIB="$(find "$GITHUB_WORKSPACE/pacman_project/build-android" "$GITHUB_WORKSPACE/out/linux-arm64" -type f -name 'libmain.so' -print -quit 2>/dev/null || true)"
