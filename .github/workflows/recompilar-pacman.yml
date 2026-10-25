@@ -281,7 +281,7 @@ jobs:
         working-directory: pacman_project
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch release-3.4.x https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          git clone --depth 1 --branch release-3.4.8 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
           mkdir -p android-package
           cp -a "$RUNNER_TEMP/SDL/android-project/." android-package/
           # Substituir o ícone padrão do SDL por um ícone próprio do Pac-Man.
@@ -329,10 +329,10 @@ jobs:
           mkdir -p android-package/app/jni
           cp -a "$RUNNER_TEMP/SDL" android-package/app/jni/SDL
 
-          # ReXGlue's JNI_OnLoad expects the SDL controller callbacks with
-          # the two-argument SDL3-era signature (II)Z. SDL 3.4.x uses the
-          # newer three-argument signatures (III)Z, so retain overloads for
-          # the runtime's registered callbacks while keeping SDL3's methods.
+          # Pin SDL 3.4.8: its controller JNI signatures match the ReXGlue runtime
+          # (two-argument pad callbacks and two trailing joystick booleans).
+          # Avoid the moving release-3.4.x branch, which introduced newer JNI
+          # signatures and caused SDLControllerManager lookup to abort at startup.
           python3 - <<'PY'
           from pathlib import Path
 
