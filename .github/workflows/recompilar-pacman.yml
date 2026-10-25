@@ -373,7 +373,7 @@ jobs:
           if current not in text:
               raise SystemExit("A assinatura HIDDeviceConnected do SDL esperada não foi encontrada.")
           if legacy not in text:
-              text = text.replace(current, current + "\\n    " + legacy, 1)
+              text = text.replace(current, current + "\n    " + legacy, 1)
               java.write_text(text)
           print("Assinatura JNI HID antiga e atual disponíveis no Java do APK.")
           PY
