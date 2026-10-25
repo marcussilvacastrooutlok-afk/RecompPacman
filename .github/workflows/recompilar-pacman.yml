@@ -281,7 +281,13 @@ jobs:
         working-directory: pacman_project
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch release-3.4.x https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          git clone --depth 1 --branch main https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          echo "=== Versão SDL selecionada ==="
+          grep -m1 -E '^project\(SDL3 LANGUAGES C VERSION' "$RUNNER_TEMP/SDL/CMakeLists.txt"
+          if ! grep -q 'VERSION "3\.5\.0"' "$RUNNER_TEMP/SDL/CMakeLists.txt"; then
+            echo "::error::A fonte SDL baixada não declara a versão 3.5.0 esperada pela biblioteca nativa ReXGlue."
+            exit 1
+          fi
           mkdir -p android-package
           cp -a "$RUNNER_TEMP/SDL/android-project/." android-package/
           # Substituir o ícone padrão do SDL por um ícone próprio do Pac-Man.
