@@ -276,6 +276,29 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Compatibilidade JNI do gesto de pinça SDL com ReXGlue
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          java = Path("android-package/app/src/main/java/org/libsdl/app/SDLActivity.java")
+          if not java.is_file():
+              raise SystemExit("SDLActivity.java não foi encontrado")
+
+          text = java.read_text()
+          signature = "public void onNativePinchStart()"
+          if signature not in text:
+              pos = text.rfind("}")
+              if pos < 0:
+                  raise SystemExit("Fechamento da classe SDLActivity não encontrado")
+              text = text[:pos] + "    public void onNativePinchStart() {}\n" + text[pos:]
+              java.write_text(text)
+
+          if signature not in java.read_text():
+              raise SystemExit("Callback JNI onNativePinchStart não foi instalado")
+          print("Callback JNI onNativePinchStart presente.")
+          PY
+
       - name: Empacotar APK Android com SDL3
         if: success()
         working-directory: pacman_project
