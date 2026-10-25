@@ -349,12 +349,12 @@ jobs:
               joystick_legacy,
           ]
           if required[0] not in text:
-              text = text.replace(anchor_down, anchor_down + "\\n    " + required[0], 1)
+              text = text.replace(anchor_down, anchor_down + "\n    " + required[0], 1)
           if required[1] not in text:
-              text = text.replace(anchor_up, anchor_up + "\\n    " + required[1], 1)
+              text = text.replace(anchor_up, anchor_up + "\n    " + required[1], 1)
           if joystick_legacy not in text:
               anchor = "    static native void nativeRemoveJoystick(int device_id);"
-              text = text.replace(anchor, "    " + joystick_legacy + "\\n" + anchor, 1)
+              text = text.replace(anchor, "    " + joystick_legacy + "\n" + anchor, 1)
           java.write_text(text)
           print("Versão SDL 3.5.0 e sobrecargas JNI compatíveis configuradas.")
           PY
