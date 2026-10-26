@@ -303,7 +303,7 @@ jobs:
               pos = text.rfind("}")
               if pos < 0:
                   raise SystemExit("Fechamento da classe SDLActivity não encontrado")
-              text = text[:pos] + "    public void onNativePinchStart() {}\\n" + text[pos:]
+              text = text[:pos] + "    public void onNativePinchStart() {}\n" + text[pos:]
               java.write_text(text)
           if signature not in java.read_text():
               raise SystemExit("Callback JNI onNativePinchStart não foi instalado")
