@@ -325,7 +325,7 @@ jobs:
           if legacy not in hid_text:
               if current not in hid_text:
                   raise SystemExit("Não encontrei a declaração HIDDeviceConnected esperada no SDL")
-              hid_text = hid_text.replace(current, legacy + "\\n    " + current, 1)
+              hid_text = hid_text.replace(current, legacy + "\n    " + current, 1)
               hid.write_text(hid_text)
           if legacy not in hid.read_text():
               raise SystemExit("Compatibilidade JNI HID de 13 argumentos não foi instalada")
