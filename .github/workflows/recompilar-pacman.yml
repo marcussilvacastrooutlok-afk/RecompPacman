@@ -281,11 +281,14 @@ jobs:
         working-directory: pacman_project
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch release-3.5.0 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          # SDL 3.5.0 is the development version used by the ReXGlue native runtime;
+          # there is no upstream release-3.5.0 branch/tag. Pin the source to main and
+          # validate its declared version before building the Android Java/native pair.
+          git clone --depth 1 --branch main https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
           echo "=== Versão SDL selecionada ==="
-          git -C "$RUNNER_TEMP/SDL" describe --tags --exact-match
-          grep -m1 -E '^project\(SDL3 LANGUAGES C VERSION' "$RUNNER_TEMP/SDL/CMakeLists.txt"
-          if ! grep -q 'VERSION "3\.5\.0"' "$RUNNER_TEMP/SDL/CMakeLists.txt"; then
+          git -C "$RUNNER_TEMP/SDL" log -1 --format='%H %s'
+          grep -m1 -E '^project\(SDL3 LANGUAGES C VERSION' "$RUNNER_TEMP/SDL/CMakeLists.txt" || true
+          if ! grep -Eq 'VERSION[[:space:]]+"?3\.5\.0"?([[:space:]]|\))' "$RUNNER_TEMP/SDL/CMakeLists.txt"; then
             echo "::error::A fonte SDL baixada não declara a versão 3.5.0 esperada pela biblioteca nativa ReXGlue."
             exit 1
           fi
