@@ -281,7 +281,7 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          java = Path("android-package/app/src/main/java/org/libsdl/app/SDLActivity.java")
+          java = Path("pacman_project/android-package/app/src/main/java/org/libsdl/app/SDLActivity.java")
           if not java.is_file():
               raise SystemExit("SDLActivity.java não foi encontrado")
 
