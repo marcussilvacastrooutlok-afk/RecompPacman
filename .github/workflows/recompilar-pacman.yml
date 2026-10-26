@@ -302,16 +302,20 @@ jobs:
           if not java.is_file():
               raise SystemExit("SDLActivity.java não foi encontrado após copiar o projeto SDL")
           text = java.read_text()
-          signature = "public void onNativePinchStart()"
+          # JNI_OnLoad registra esta função nativa; uma implementação Java vazia
+          # não satisfaz RegisterNatives e provoca NoSuchMethodError/SIGABRT.
+          signature = "public static native void onNativePinchStart();"
           if signature not in text:
-              pos = text.rfind("}")
-              if pos < 0:
-                  raise SystemExit("Fechamento da classe SDLActivity não encontrado")
-              text = text[:pos] + "    public void onNativePinchStart() {}\n" + text[pos:]
+              text = text.replace("public void onNativePinchStart() {}", signature, 1)
+              if signature not in text:
+                  pos = text.rfind("}")
+                  if pos < 0:
+                      raise SystemExit("Fechamento da classe SDLActivity não encontrado")
+                  text = text[:pos] + "    " + signature + "\n" + text[pos:]
               java.write_text(text)
           if signature not in java.read_text():
-              raise SystemExit("Callback JNI onNativePinchStart não foi instalado")
-          print("Callback JNI onNativePinchStart presente.")
+              raise SystemExit("Declaração nativa JNI onNativePinchStart não foi instalada")
+          print("Declaração nativa JNI onNativePinchStart presente.")
 
           # SDL's current Java HID manager adds a reportID parameter, while the
           # ReXGlue native runtime expects the SDL 3.4.8 JNI descriptor (13 args).
