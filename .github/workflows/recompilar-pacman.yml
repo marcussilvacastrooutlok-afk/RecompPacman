@@ -302,7 +302,7 @@ jobs:
           if not java.is_file():
               raise SystemExit("SDLActivity.java não foi encontrado após copiar o projeto SDL")
           text = java.read_text()
-          signature = "public void onNativePinchStart()"
+          signature = "public static native void onNativePinchStart();"
           if signature not in text:
               pos = text.rfind("}")
               if pos < 0:
