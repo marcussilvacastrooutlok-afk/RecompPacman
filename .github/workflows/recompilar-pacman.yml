@@ -281,8 +281,9 @@ jobs:
         working-directory: pacman_project
         run: |
           set -euo pipefail
-          git clone --depth 1 --branch main https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
+          git clone --depth 1 --branch release-3.5.0 https://github.com/libsdl-org/SDL.git "$RUNNER_TEMP/SDL"
           echo "=== Versão SDL selecionada ==="
+          git -C "$RUNNER_TEMP/SDL" describe --tags --exact-match
           grep -m1 -E '^project\(SDL3 LANGUAGES C VERSION' "$RUNNER_TEMP/SDL/CMakeLists.txt"
           if ! grep -q 'VERSION "3\.5\.0"' "$RUNNER_TEMP/SDL/CMakeLists.txt"; then
             echo "::error::A fonte SDL baixada não declara a versão 3.5.0 esperada pela biblioteca nativa ReXGlue."
