@@ -363,36 +363,36 @@ jobs:
           java = Path("android-package/app/src/main/java/org/libsdl/app/SDLActivity.java")
           text = java.read_text()
           old = '''    protected String[] getArguments() {
-        return new String[0];
-    }'''
-          new = '''    protected String[] getArguments() {
-        java.io.File gameDir = new java.io.File(getFilesDir(), "game");
-        java.io.File xex = new java.io.File(gameDir, "default.xex");
-        if (!xex.isFile()) {
-            java.io.InputStream input = null;
-            java.io.FileOutputStream output = null;
-            try {
-                if (!gameDir.isDirectory() && !gameDir.mkdirs()) {
-                    throw new java.io.IOException("Could not create game data directory: " + gameDir);
-                }
-                input = getAssets().open("game/default.xex");
-                output = new java.io.FileOutputStream(xex);
-                byte[] buffer = new byte[65536];
-                int count;
-                while ((count = input.read(buffer)) != -1) {
-                    output.write(buffer, 0, count);
-                }
-                output.flush();
-            } catch (Exception e) {
-                Log.e(TAG, "Could not prepare bundled game data", e);
-                return new String[0];
-            } finally {
-                try { if (input != null) input.close(); } catch (Exception ignored) {}
-                try { if (output != null) output.close(); } catch (Exception ignored) {}
-            }
-        }
-        return new String[] { "--game_data_root=" + gameDir.getAbsolutePath() };
-    }'''
+                  return new String[0];
+              }'''
+                    new = '''    protected String[] getArguments() {
+                  java.io.File gameDir = new java.io.File(getFilesDir(), "game");
+                  java.io.File xex = new java.io.File(gameDir, "default.xex");
+                  if (!xex.isFile()) {
+                      java.io.InputStream input = null;
+                      java.io.FileOutputStream output = null;
+                      try {
+                          if (!gameDir.isDirectory() && !gameDir.mkdirs()) {
+                              throw new java.io.IOException("Could not create game data directory: " + gameDir);
+                          }
+                          input = getAssets().open("game/default.xex");
+                          output = new java.io.FileOutputStream(xex);
+                          byte[] buffer = new byte[65536];
+                          int count;
+                          while ((count = input.read(buffer)) != -1) {
+                              output.write(buffer, 0, count);
+                          }
+                          output.flush();
+                      } catch (Exception e) {
+                          Log.e(TAG, "Could not prepare bundled game data", e);
+                          return new String[0];
+                      } finally {
+                          try { if (input != null) input.close(); } catch (Exception ignored) {}
+                          try { if (output != null) output.close(); } catch (Exception ignored) {}
+                      }
+                  }
+                  return new String[] { "--game_data_root=" + gameDir.getAbsolutePath() };
+              }'''
           if old not in text:
               raise SystemExit("Não encontrei o getArguments() padrão do SDL 3.5.0")
           java.write_text(text.replace(old, new, 1))
