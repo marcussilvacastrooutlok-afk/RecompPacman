@@ -365,7 +365,7 @@ jobs:
           old = '''    protected String[] getArguments() {
                   return new String[0];
               }'''
-                    new = '''    protected String[] getArguments() {
+          new = '''    protected String[] getArguments() {
                   java.io.File gameDir = new java.io.File(getFilesDir(), "game");
                   java.io.File xex = new java.io.File(gameDir, "default.xex");
                   if (!xex.isFile()) {
