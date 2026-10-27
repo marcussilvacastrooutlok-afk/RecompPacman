@@ -58,3 +58,119 @@ for old, new in replacements:
         raise SystemExit("Could not find expected startup block: " + old.splitlines()[0])
 path.write_text(text)
 print("Inserted Android logcat startup diagnostics into windowed_app_main_sdl.cpp.")
+
+# Instrument ReXApp initialization so a false return identifies the failing phase.
+app_path = Path("src/ui/rex_app.cpp")
+app_text = app_path.read_text()
+app_anchor = "#include <cstdlib>\n"
+if "PACMAN_DIAG" not in app_text:
+    app_diag = """#if defined(__ANDROID__)
+#include <android/log.h>
+#define PACMAN_DIAG(...) __android_log_print(ANDROID_LOG_ERROR, "PacmanDiag", __VA_ARGS__)
+#else
+#define PACMAN_DIAG(...) ((void)0)
+#endif
+"""
+    if app_anchor not in app_text:
+        raise SystemExit("Could not find include anchor in src/ui/rex_app.cpp")
+    app_text = app_text.replace(app_anchor, app_anchor + app_diag, 1)
+
+old_init = """bool ReXApp::OnInitialize() {
+  if (!SetupEnvironment())
+    return false;
+  if (!SetupPresentation())
+    return false;
+
+  auto paths = OnFinalizePaths(resolved_defaults_, MakeResumeCallback());
+  if (!paths) {
+    // Async: consumer will invoke resume when ready. OnInitialize returns
+    // true so the event loop keeps pumping (wizard dialogs render).
+    return true;
+  }
+
+  if (!ConstructRuntime(*paths))
+    return false;
+  LaunchModule();
+  return true;
+}"""
+new_init = """bool ReXApp::OnInitialize() {
+  PACMAN_DIAG("ReXApp: SetupEnvironment begin");
+  if (!SetupEnvironment()) {
+    PACMAN_DIAG("ReXApp: SetupEnvironment FAILED");
+    return false;
+  }
+  PACMAN_DIAG("ReXApp: SetupEnvironment OK");
+  PACMAN_DIAG("ReXApp: SetupPresentation begin");
+  if (!SetupPresentation()) {
+    PACMAN_DIAG("ReXApp: SetupPresentation FAILED");
+    return false;
+  }
+  PACMAN_DIAG("ReXApp: SetupPresentation OK");
+
+  auto paths = OnFinalizePaths(resolved_defaults_, MakeResumeCallback());
+  PACMAN_DIAG("ReXApp: OnFinalizePaths returned %s", paths ? "paths" : "async/no paths");
+  if (!paths) {
+    // Async: consumer will invoke resume when ready. OnInitialize returns
+    // true so the event loop keeps pumping (wizard dialogs render).
+    return true;
+  }
+
+  PACMAN_DIAG("ReXApp: game_data_root='%s'", paths->game_data_root.string().c_str());
+  PACMAN_DIAG("ReXApp: ConstructRuntime begin");
+  if (!ConstructRuntime(*paths)) {
+    PACMAN_DIAG("ReXApp: ConstructRuntime FAILED");
+    return false;
+  }
+  PACMAN_DIAG("ReXApp: ConstructRuntime OK");
+  LaunchModule();
+  PACMAN_DIAG("ReXApp: LaunchModule queued");
+  return true;
+}"""
+if old_init in app_text:
+    app_text = app_text.replace(old_init, new_init, 1)
+elif new_init not in app_text:
+    raise SystemExit("Could not find ReXApp::OnInitialize block")
+
+# Add explicit reason tags to known early returns in presentation/runtime setup.
+pairs = [
+("""      REXLOG_ERROR("Failed to load GPU plugin '{}'. See log for details.", config_.gpu_plugin);
+      rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error, msg);
+      return false;""",
+ """      REXLOG_ERROR("Failed to load GPU plugin '{}'. See log for details.", config_.gpu_plugin);
+      PACMAN_DIAG("ReXApp: GPU plugin load failed: %s", config_.gpu_plugin.c_str());
+      rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error, msg);
+      return false;"""),
+("""      REXLOG_ERROR("Graphics presentation setup failed: {:08X}", status);
+      return false;""",
+ """      REXLOG_ERROR("Graphics presentation setup failed: {:08X}", status);
+      PACMAN_DIAG("ReXApp: graphics SetupPresentation failed: %08X", status);
+      return false;"""),
+("""    REXLOG_ERROR("Failed to create window");
+    return false;""",
+ """    REXLOG_ERROR("Failed to create window");
+    PACMAN_DIAG("ReXApp: Window::Create failed");
+    return false;"""),
+("""    REXLOG_ERROR("{}", msg);
+    rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error, msg);
+    return false;""",
+ """    REXLOG_ERROR("{}", msg);
+    PACMAN_DIAG("ReXApp: %s", msg.c_str());
+    rex::ShowSimpleMessageBox(rex::SimpleMessageBoxType::Error, msg);
+    return false;"""),
+("""    REXLOG_ERROR("Runtime setup failed: {:08X}", status);
+    return false;""",
+ """    REXLOG_ERROR("Runtime setup failed: {:08X}", status);
+    PACMAN_DIAG("ReXApp: Runtime::Setup failed: %08X", status);
+    return false;"""),
+("""      REXLOG_ERROR("Failed to initialize rexcrt heap");
+      return false;""",
+ """      REXLOG_ERROR("Failed to initialize rexcrt heap");
+      PACMAN_DIAG("ReXApp: InitHeap failed");
+      return false;""")
+]
+for old_block,new_block in pairs:
+    if old_block in app_text:
+        app_text = app_text.replace(old_block,new_block,1)
+
+app_path.write_text(app_text)
+print("Added ReXApp initialization phase diagnostics to src/ui/rex_app.cpp.")
