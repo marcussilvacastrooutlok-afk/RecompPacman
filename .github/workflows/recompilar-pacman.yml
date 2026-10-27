@@ -22,7 +22,10 @@ jobs:
 
       - name: Corrigir diretório de logs no Android
         run: python3 tools/android/fix_android_logs.py
-\n      - name: Instrumentar inicialização Android para logcat\n        run: python3 tools/android/add_startup_diagnostics.py\n
+
+      - name: Instrumentar inicialização Android para logcat
+        run: python3 tools/android/add_startup_diagnostics.py
+
       - name: Instalar dependencias
         run: |
           sudo apt-get update
