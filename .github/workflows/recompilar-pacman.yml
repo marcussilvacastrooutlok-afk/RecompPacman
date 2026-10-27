@@ -21,51 +21,7 @@ jobs:
           submodules: recursive
 
       - name: Corrigir diretório de logs no Android
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/ui/rex_app.cpp")
-          text = path.read_text()
-          include_anchor = '#include <cstdlib>\n'
-          sdl_include = '#include <SDL3/SDL.h>\n'
-          if sdl_include not in text:
-              if include_anchor not in text:
-                  raise SystemExit("Não encontrei o ponto para incluir SDL3 em rex_app.cpp")
-              text = text.replace(include_anchor, include_anchor + sdl_include, 1)
-
-          old = '''  if (log_file_cvar.empty()) {
-            log_config.app_name = std::string(GetName());
-            log_config.log_dir = (exe_dir / "logs").string();
-          }
-'''
-          new = '''  if (log_file_cvar.empty()) {
-#if defined(__ANDROID__)
-            // Android não permite criar arquivos ao lado do executável em /system/bin.
-            // SDL fornece um diretório privado e gravável para os dados deste app.
-            std::string app_name(GetName());
-            char* pref_path = SDL_GetPrefPath("ReXGlue", app_name.c_str());
-            if (pref_path) {
-              log_config.app_name = app_name;
-              log_config.log_dir = (std::filesystem::path(pref_path) / "logs").string();
-              SDL_free(pref_path);
-            } else {
-              // Não derrubar o jogo se o caminho de logs não puder ser obtido.
-              log_config.app_name.clear();
-              log_config.log_dir.clear();
-            }
-#else
-            log_config.app_name = std::string(GetName());
-            log_config.log_dir = (exe_dir / "logs").string();
-#endif
-          }
-'''
-          if old not in text:
-              raise SystemExit("O bloco original de configuração de logs não foi encontrado; não apliquei a correção.")
-          text = text.replace(old, new, 1)
-          path.write_text(text)
-          print("Configuração de logs Android alterada para diretório privado gravável.")
-          PY
+        run: python3 tools/android/fix_android_logs.py
 
       - name: Instalar dependencias
         run: |
