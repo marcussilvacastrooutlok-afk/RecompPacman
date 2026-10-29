@@ -399,19 +399,31 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, siz
                                           PageAccess access, bool commit) {
 #if REX_PLATFORM_ANDROID
   if (android_ASharedMemory_create_) {
+    errno = 0;
     int sharedmem_fd = android_ASharedMemory_create_(path.c_str(), length);
-    return sharedmem_fd >= 0 ? static_cast<FileMappingHandle>(sharedmem_fd)
-                             : kFileMappingHandleInvalid;
+    if (sharedmem_fd < 0) {
+      REXSYS_ERROR("ASharedMemory_create('{}', {}) failed: {} ({})", path.string(),
+                   length, strerror(errno), errno);
+      return kFileMappingHandleInvalid;
+    }
+    return static_cast<FileMappingHandle>(sharedmem_fd);
   }
 
+  errno = 0;
   int ashmem_fd = open("/" ASHMEM_NAME_DEF, O_RDWR);
   if (ashmem_fd < 0) {
+    REXSYS_ERROR("Opening Android ashmem device failed: {} ({})", strerror(errno), errno);
     return kFileMappingHandleInvalid;
   }
   char ashmem_name[ASHMEM_NAME_LEN];
   strlcpy(ashmem_name, path.c_str(), rex::countof(ashmem_name));
-  if (ioctl(ashmem_fd, ASHMEM_SET_NAME, ashmem_name) < 0 ||
-      ioctl(ashmem_fd, ASHMEM_SET_SIZE, length) < 0) {
+  if (ioctl(ashmem_fd, ASHMEM_SET_NAME, ashmem_name) < 0) {
+    REXSYS_ERROR("ASHMEM_SET_NAME failed: {} ({})", strerror(errno), errno);
+    close(ashmem_fd);
+    return kFileMappingHandleInvalid;
+  }
+  if (ioctl(ashmem_fd, ASHMEM_SET_SIZE, length) < 0) {
+    REXSYS_ERROR("ASHMEM_SET_SIZE({}) failed: {} ({})", length, strerror(errno), errno);
     close(ashmem_fd);
     return kFileMappingHandleInvalid;
   }
