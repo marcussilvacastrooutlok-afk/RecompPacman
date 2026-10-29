@@ -185,7 +185,7 @@ static bool IsRangeFullyMapped(void* base_address, size_t length) {
 
   const uintptr_t begin = reinterpret_cast<uintptr_t>(base_address);
   const uintptr_t end = begin + length;
-  if (end < begin) { 
+  if (end < begin) {
     return false;
   }
 
@@ -202,7 +202,7 @@ static bool IsRangeFullyMapped(void* base_address, size_t length) {
     if (e.end <= cursor)
       continue;
     if (e.start > cursor)
-      return false;  
+      return false;
     cursor = e.end;
     if (cursor >= end)
       return true;
@@ -402,8 +402,8 @@ FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, siz
     errno = 0;
     int sharedmem_fd = android_ASharedMemory_create_(path.c_str(), length);
     if (sharedmem_fd < 0) {
-      REXSYS_ERROR("ASharedMemory_create('{}', {}) failed: {} ({})", path.string(),
-                   length, strerror(errno), errno);
+      REXSYS_ERROR("ASharedMemory_create('{}', {}) failed: {} ({})", path.string(), length,
+                   strerror(errno), errno);
       return kFileMappingHandleInvalid;
     }
     return static_cast<FileMappingHandle>(sharedmem_fd);
