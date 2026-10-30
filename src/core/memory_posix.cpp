@@ -51,8 +51,12 @@
 
 #include <dlfcn.h>
 #include <sys/ioctl.h>
+#include <sys/syscall.h>
 
 #include <linux/ashmem.h>
+#if __has_include(<linux/memfd.h>)
+#include <linux/memfd.h>
+#endif
 #endif
 
 namespace rex {
@@ -398,6 +402,23 @@ bool QueryProtect(void* base_address, size_t& length, PageAccess& access_out) {
 FileMappingHandle CreateFileMappingHandle(const std::filesystem::path& path, size_t length,
                                           PageAccess access, bool commit) {
 #if REX_PLATFORM_ANDROID
+  // Prefer a sparse memfd for the 4.5 GiB guest address arena. Android's
+  // ashmem/ASharedMemory implementations may reject mappings this large.
+#if defined(SYS_memfd_create)
+  errno = 0;
+  int memfd = static_cast<int>(syscall(SYS_memfd_create, path.c_str(), 0x0001U));
+  if (memfd >= 0) {
+    if (rex_ftruncate64(memfd, static_cast<off_t>(length)) == 0) {
+      return static_cast<FileMappingHandle>(memfd);
+    }
+    REXSYS_ERROR("memfd ftruncate64('{}', {}) failed: {} ({})", path.string(), length,
+                 strerror(errno), errno);
+    close(memfd);
+  } else {
+    REXSYS_WARN("memfd_create('{}', {}) unavailable: {} ({})", path.string(), length,
+                strerror(errno), errno);
+  }
+#endif
   if (android_ASharedMemory_create_) {
     errno = 0;
     int sharedmem_fd = android_ASharedMemory_create_(path.c_str(), length);
