@@ -187,14 +187,14 @@ bool build_bctr(BuilderContext& ctx) {
 bool build_bctrl(BuilderContext& ctx) {
   if (!ctx.config().skipLr)
     ctx.println("\tctx.lr = 0x{:X};", ctx.base + 4);
-  ctx.println("\tREX_CALL_INDIRECT_FUNC({}.u32);", ctx.ctr());
+  ctx.println("\tREX_CALL_INDIRECT_FUNC({}.u32, 0x{:X});", ctx.ctr(), ctx.base);
   ctx.csrState = CSRState::Unknown;  // the call could change it
   return true;
 }
 
 bool build_bnectr(BuilderContext& ctx) {
   ctx.println("\tif (!{}.eq) {{", ctx.cr(ctx.insn.operands[0]));
-  ctx.println("\t\tREX_CALL_INDIRECT_FUNC({}.u32);", ctx.ctr());
+  ctx.println("\t\tREX_CALL_INDIRECT_FUNC({}.u32, 0x{:X});", ctx.ctr(), ctx.base);
   ctx.println("\t\treturn;");
   ctx.println("\t}}");
   return true;
