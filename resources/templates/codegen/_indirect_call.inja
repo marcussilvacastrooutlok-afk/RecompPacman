@@ -19,7 +19,7 @@
 #define REX_LOOKUP_FUNC(x, y) \
   (*(PPCFunc**)(x + REX_IMAGE_BASE + REX_IMAGE_SIZE + (u64(u32(y) - REX_CODE_BASE) * 2)))
 
-#define REX_CALL_INDIRECT_FUNC(x)                                                          \
+#define REX_CALL_INDIRECT_FUNC(x, callsite)                                               \
   do {                                                                                     \
     REX_PROFILE_INDIRECT_DISPATCH();                                                       \
     uint32_t rex_indirect_target_ = (uint32_t)(x);                                         \
@@ -32,6 +32,8 @@
     }                                                                                      \
     if (!rex_indirect_func_) [[unlikely]] {                                                \
       ctx.last_indirect_target = rex_indirect_target_;                                     \
+      REXCPU_WARN("Indirect dispatch miss: callsite=0x{:08X}, target=0x{:08X}, lr=0x{:08X}", \
+                  uint32_t(callsite), rex_indirect_target_, uint32_t(ctx.lr));              \
       rex_indirect_func_ = rex::runtime::ResolveIndirectFunction(rex_indirect_target_);    \
     }                                                                                      \
     rex_indirect_func_(ctx, base);                                                         \
