@@ -265,6 +265,55 @@ void discoverAllFunctions(CodegenContext& ctx) {
   }
 
   REXCODEGEN_TRACE("Analyze: {} total functions after vtable scan", graph.functionCount());
+
+  // Focused diagnostic for the Pac-Man runtime's first invalid indirect call.
+  // Keep this read-only: it reports decoded guest instructions and graph
+  // ownership without registering speculative function entry points.
+  {
+    constexpr uint32_t kCallSite = 0x8262C908;
+    constexpr uint32_t kIndirectTarget = 0x82738920;
+    auto* exactTarget = graph.getFunction(kIndirectTarget);
+    auto* containingTarget = graph.getFunctionContaining(kIndirectTarget);
+    REXCODEGEN_INFO(
+        "[INDIRECT-DIAG] target=0x{:08X} exact_entry={} containing_function={}",
+        kIndirectTarget, exactTarget != nullptr,
+        containingTarget ? fmt::format("0x{:08X}", containingTarget->base())
+                         : std::string("none"));
+    if (containingTarget) {
+      REXCODEGEN_INFO(
+          "[INDIRECT-DIAG] owner name={} size=0x{:X} end=0x{:08X} "
+          "authority={} state={} blocks={} labels={} contains={}",
+          containingTarget->name(), containingTarget->size(),
+          containingTarget->end(),
+          static_cast<int>(containingTarget->authority()),
+          static_cast<int>(containingTarget->state()),
+          containingTarget->blocks().size(), containingTarget->labels().size(),
+          containingTarget->containsAddress(kIndirectTarget));
+      for (const auto& block : containingTarget->blocks()) {
+        REXCODEGEN_INFO(
+            "[INDIRECT-DIAG] owner_block base=0x{:08X} size=0x{:X} "
+            "contains_target={}",
+            block.base, block.size, block.contains(kIndirectTarget));
+      }
+    }
+
+    for (uint32_t center : {kCallSite, kIndirectTarget}) {
+      for (int offset = -8; offset <= 8; offset += 4) {
+        const uint32_t address = static_cast<uint32_t>(
+            static_cast<int64_t>(center) + offset);
+        const auto* insn = ctx.decoded().get(address);
+        if (!insn) {
+          REXCODEGEN_INFO(
+              "[INDIRECT-DIAG] insn address=0x{:08X} unavailable", address);
+          continue;
+        }
+        REXCODEGEN_INFO(
+            "[INDIRECT-DIAG] insn address=0x{:08X} raw=0x{:08X} opcode={}",
+            address, static_cast<uint32_t>(insn->code),
+            static_cast<int>(insn->opcode));
+      }
+    }
+  }
 }
 
 //=============================================================================
