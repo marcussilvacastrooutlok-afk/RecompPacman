@@ -473,14 +473,33 @@ jobs:
       - name: Preparar diagnosticos compactos
         if: always()
         run: |
+          set -euo pipefail
           mkdir -p diagnosticos
           echo "Run: $GITHUB_RUN_ID" > diagnosticos/resumo.txt
           echo "Commit: $GITHUB_SHA" >> diagnosticos/resumo.txt
-          if [ -f pacman_project/generated/default/pacman_colors_recomp.205.cpp ]; then
-            SOURCE="pacman_project/generated/default/pacman_colors_recomp.205.cpp"
-            echo "Arquivo que falhou: $SOURCE" >> diagnosticos/resumo.txt
-            grep -n -B 25 -A 25 -F "loc_82AF498C" "$SOURCE" > diagnosticos/erro-label.txt || true
-            cp "$SOURCE" diagnosticos/pacman_colors_recomp.205.cpp
+          GENERATED="pacman_project/generated/default"
+          if [ -d "$GENERATED" ]; then
+            echo "=== Busca global do trap ===" >> diagnosticos/resumo.txt
+            grep -R -n -E 'sub_8262C898|82738920|8262C898' "$GENERATED" \
+              --include='*.cpp' --include='*.h' \
+              > diagnosticos/enderecos-trap.txt || true
+            echo "=== Arquivos gerados e tamanhos ===" >> diagnosticos/resumo.txt
+            find "$GENERATED" -maxdepth 1 -type f \
+              \( -name '*.cpp' -o -name '*.h' \) \
+              -printf '%f %s bytes\\n' | sort >> diagnosticos/resumo.txt
+            # Preserve only shards that contain the caller/target, plus the
+            # generated init/register mapping sources needed to inspect dispatch.
+            while IFS= read -r SOURCE; do
+              [ -f "$SOURCE" ] || continue
+              BASE="$(basename "$SOURCE")"
+              cp "$SOURCE" "diagnosticos/$BASE"
+            done < <(grep -R -l -E 'sub_8262C898|82738920|8262C898' "$GENERATED" \
+              --include='*.cpp' --include='*.h' || true)
+            for SOURCE in "$GENERATED"/*init*.cpp "$GENERATED"/*register*.cpp \
+                          "$GENERATED"/*init*.h "$GENERATED"/*register*.h; do
+              [ -f "$SOURCE" ] || continue
+              cp "$SOURCE" "diagnosticos/$(basename "$SOURCE")"
+            done
           fi
           for file in \
             pacman_project/CMakeLists.txt \
