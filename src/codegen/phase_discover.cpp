@@ -275,10 +275,9 @@ void discoverAllFunctions(CodegenContext& ctx) {
     auto* exactTarget = graph.getFunction(kIndirectTarget);
     auto* containingTarget = graph.getFunctionContaining(kIndirectTarget);
     REXCODEGEN_INFO(
-        "[INDIRECT-DIAG] target=0x{:08X} exact_entry={} containing_function={}",
-        kIndirectTarget, exactTarget != nullptr,
-        containingTarget ? fmt::format("0x{:08X}", containingTarget->base())
-                         : std::string("none"));
+        "[INDIRECT-DIAG] target=0x{:08X} exact_entry={} has_containing_function={} owner_base=0x{:08X}",
+        kIndirectTarget, exactTarget != nullptr, containingTarget != nullptr,
+        containingTarget ? containingTarget->base() : 0u);
     if (containingTarget) {
       REXCODEGEN_INFO(
           "[INDIRECT-DIAG] owner name={} size=0x{:X} end=0x{:08X} "
