@@ -90,6 +90,10 @@ target_link_libraries(rexruntime
         xxHash::xxhash
 )
 
+if(ANDROID)
+    target_link_libraries(rexruntime PRIVATE log)
+endif()
+
 if(REXGLUE_ENABLE_TRACY)
     # TARGET_NAME is what tells install(EXPORT) this text is a target to
     # namespace. Without it the plain name survives into the installed config
