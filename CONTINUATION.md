@@ -142,3 +142,40 @@ O conteúdo confirma que o XEX está embutido no APK. O workflow copia explicita
 4. Depois disso, investigar o crash de dispatch indireto usando a instrumentação R11/R31 já registrada acima. O run atual usou o commit `461f0a2a`, anterior à instrumentação `7fa12ff9`; portanto, este APK não contém o diagnóstico R11/R31.
 5. Registrar o novo commit/run e só solicitar teste no telefone quando houver APK adequado.
 
+
+
+## Registro de continuidade — 2026-11-02 (run 41379736559)
+
+- Run `41379736559` terminou com `success` no commit `298c3be2d2fbcd3df9b65af20be2d10bd7b96d42`.
+- Artefatos publicados: `pacman-android-apk` (artifact ID `13114417157`, 118.765.305 bytes) e `diagnostico-pacman` (artifact ID `13113729824`).
+- Esse run apenas recompilou o workflow existente após atualização do registro; não implementa o seletor de pasta nem remove o XEX embutido. Não solicitar instalação/teste deste APK.
+
+## Decisão de arquitetura de preparação dos dados — 2026-11-02
+
+O usuário confirmou que outros jogos recompilados que utiliza consomem armazenamento interno aproximadamente equivalente ao tamanho da pasta do jogo depois da seleção. Adotar como referência uma preparação local dos dados para Pac-Man e Resident Evil.
+
+### Estratégia
+
+1. Exibir uma tela inicial/configurações que funcione sem dados de jogo.
+2. Oferecer seleção de diretório por Android Storage Access Framework (`ACTION_OPEN_DOCUMENT_TREE`).
+3. Persistir permissão de leitura da URI selecionada.
+4. Copiar recursivamente os arquivos e subpastas para diretório privado do app, mantendo nomes/estrutura.
+5. Verificar espaço livre antes da cópia; exibir progresso; tratar cancelamento, I/O e falta de espaço; não iniciar runtime se a preparação falhar.
+6. Reutilizar a cópia existente quando válida; permitir selecionar outra pasta e substituir/preparar dados novamente.
+7. Iniciar SDL/ReXGlue passando `--game_data_root=<caminho privado POSIX>`.
+8. Não incluir `default.xex` como asset no APK. O XEX pode continuar sendo entrada temporária do codegen no workflow, mas não deve ser empacotado nem publicado.
+
+### Integração SDL identificada
+
+- No SDL 3.5.0 fixado em `8bf3b7215ad9fc3deb583c6a3a37c6c67f2e24e4`, `SDLActivity.getArguments()` retorna argumentos para o aplicativo nativo e pode ser sobrescrito.
+- O manifesto atual declara `SDLActivity` como launcher. A nova tela Android deverá ser launcher, e iniciar `SDLActivity` somente após a preparação dos dados; o argumento `--game_data_root` será fornecido via Intent extra e lido pelo override de `getArguments()`.
+- Ainda não foi implementada a Activity nem a cópia recursiva. Não tratar o helper JNI ContentResolver como substituto dessa funcionalidade.
+- Run/artefato atual ainda é build antigo com asset XEX; nenhum APK final SAF foi produzido.
+
+### Próximos passos
+
+1. Implementar classe Java Android de setup reutilizável com seletor SAF, cópia recursiva, validação de espaço, progresso e mensagens de erro.
+2. Alterar manifesto para usar a tela de setup como launcher e `SDLActivity` como Activity interna.
+3. Remover do workflow a cópia do XEX para `assets/game/`; modificar `getArguments()` para receber somente o caminho privado preparado.
+4. Validar no APK: sem nenhum `.xex`/asset de jogo; libs ARM64 presentes; app abre sem jogo; seletor persiste; cópia e início usam caminho correto.
+5. Só depois solicitar instalação no telefone e retomar diagnóstico R11/R31 com o APK instrumentado.
