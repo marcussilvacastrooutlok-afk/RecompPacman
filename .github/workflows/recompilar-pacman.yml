@@ -173,6 +173,7 @@ jobs:
           additions = [
               'target_include_directories(pacman_colors PRIVATE "${REXSDK_DIR}/thirdparty/imgui")',
               'target_compile_definitions(pacman_colors PRIVATE REX_ANDROID_APP_IDENTIFIER="pacman_colors")',
+              'target_link_libraries(pacman_colors PRIVATE log)',
           ]
           anchor = "rexglue_setup_target(pacman_colors)"
           if anchor not in text:
@@ -187,6 +188,39 @@ jobs:
 
           print("Includes do ImGui e identificador Android verificados.")
           print(cmake_file.read_text())
+          PY
+
+
+      - name: Instrumentar cadastro de callbacks do Pac-Man
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("pacman_project/generated/default")
+          marker = "DEFINE_REX_FUNC(sub_8262C828) {"
+          matches = []
+          for path in root.glob("pacman_colors_recomp.*.cpp"):
+              source = path.read_text()
+              if marker not in source:
+                  continue
+              prologue = marker + "\n\tREX_FUNC_PROLOGUE();"
+              if source.count(prologue) != 1:
+                  raise SystemExit(f"Prólogo inesperado em {path}")
+              if "#include <android/log.h>" not in source:
+                  lines = source.splitlines()
+                  lines.insert(1, "#include <android/log.h>")
+                  source = "\n".join(lines) + "\n"
+              diagnostic = prologue + """
+          \t__android_log_print(ANDROID_LOG_ERROR, "ReXCallbackReg",
+          \t    "index=%u target=0x%08X arg5=0x%08X arg6=0x%08X arg7=0x%08X",
+          \t    REX_LOAD_U32(0x83482808), ctx.r4.u32, ctx.r5.u32,
+          \t    ctx.r6.u32, ctx.r7.u32);"""
+              source = source.replace(prologue, diagnostic, 1)
+              path.write_text(source)
+              matches.append(str(path))
+          if len(matches) != 1:
+              raise SystemExit(f"Esperava exatamente uma definição de sub_8262C828; encontrei {matches}")
+          print("Instrumentação de cadastro instalada em:", matches[0])
           PY
 
       - name: Verificar Android NDK
