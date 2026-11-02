@@ -1,0 +1,110 @@
+# CONTINUIDADE DO PROJETO — RecompPacman
+
+Última atualização: 2026-11-01
+
+Este arquivo registra o estado técnico confirmado para que outro chat ou colaborador possa continuar sem repetir etapas. Leia antes de alterar o projeto.
+
+## Objetivo
+
+Gerar um APK Android ARM64 que execute a recompilação nativa de Pac-Man usando ReXGlue/ReXRuntime. Não é um emulador. O aplicativo deve permitir selecionar a pasta dos arquivos do jogo e, futuramente, oferecer configurações como limite/visualização de FPS e resolução. O APK deve abrir e permitir configurar mesmo quando os arquivos do jogo não estiverem presentes.
+
+## Ambiente do usuário
+
+- O usuário trabalha somente pelo celular Android (Motorola Edge 30 Pro, Android 13, Snapdragon 8 Gen 1).
+- Usa Termux, ADB e GitHub Actions; não possui computador.
+- Não pedir para reinstalar o conector GitHub nem repetir configurações já concluídas.
+- Ao receber “Ok”, interpretar como autorização para continuar, sem pedir confirmação a cada etapa.
+- Instruções no dispositivo devem ser compatíveis com Termux/Android.
+
+## Repositório e conta
+
+- Repositório: https://github.com/marcussilvacastrooutlok-afk/RecompPacman
+- Branch principal: main
+- Conta GitHub: marcussilvacastrooutlok-afk
+
+## Diagnóstico confirmado
+
+O APK chega à execução do jogo e encerra ao ocorrer uma chamada indireta inválida. O log mais recente identificou:
+
+```text
+Indirect dispatch miss:
+callsite=0x8262C908
+target=0x82738920
+lr=0x8262C90C
+
+[FATAL] Invalid indirect function:
+target=0x82738920
+ctr=0x0000000082738920
+r12=0x000000008262C90C
+r3=0x00000000833AB458
+```
+
+A análise dos fontes gerados mostrou que **0x82738920 não é início de função**. É o endereço interno de retorno dentro de `sub_827388A8`, associado a uma chamada para `sub_8234D1F0`:
+
+```cpp
+ctx.lr = 0x82738920;
+sub_8234D1F0(ctx, base);
+```
+
+Há registros de função em `0x827388A8` e `0x82738930`, mas não em `0x82738920`. Portanto, não registrar esse endereço artificialmente como função. A hipótese a investigar é como um endereço interno/de retorno foi parar como destino de uma chamada indireta.
+
+O ponto de chamada identificado em `sub_8262C898` carrega o destino de memória usando o registrador R31 como endereço do slot:
+
+```cpp
+ctx.r11.u64 = REX_LOAD_U32(ctx.r31.u32 + 0);
+ctx.ctr.u64 = ctx.r11.u64;
+ctx.lr = 0x8262C90C;
+REX_CALL_INDIRECT_FUNC(ctx.ctr.u32, 0x8262C908);
+```
+
+Logo, R31 indica o endereço do ponteiro carregado e R11 contém o destino. É essencial descobrir o valor de ambos no próximo crash.
+
+## Alteração já enviada ao GitHub
+
+Commit confirmado em `main`:
+
+- Commit: `7fa12ff9e1f299e84c2e3611d3f00f705e104090`
+- Mensagem: `Add r31 and r11 to invalid indirect-call diagnostics`
+- Arquivo alterado: `src/system/function_dispatcher.cpp`
+- A mensagem fatal agora inclui `r11` e `r31`, além dos campos anteriores.
+
+A alteração é apenas instrumentação de diagnóstico. **Ainda não é uma correção do crash e não há confirmação de um APK novo construído com esse commit.**
+
+## Próximas etapas obrigatórias
+
+1. Verificar o workflow Android/APK em `.github/workflows/` e confirmar se há execução de build posterior ao commit `7fa12ff9`.
+2. Se não houver execução, iniciar o workflow disponível usando uma ação autorizada do GitHub; se isso não estiver disponível, orientar o usuário com o mínimo de passos no celular para executar Actions.
+3. Confirmar que o APK foi construído a partir do commit `7fa12ff9` ou posterior. Não confundir sucesso do workflow com correção do jogo.
+4. Usuário instala esse APK e reproduz o fechamento.
+5. Obter o novo log da pasta privada do app: `/data/data/org.libsdl.app/files/logs/`. O usuário já conseguiu localizar e enviar logs desse diretório; não repetir instruções antigas de exportação.
+6. Analisar principalmente `r31` e `r11` para localizar o slot de ponteiro e rastrear quem escreveu o valor `0x82738920`.
+7. Corrigir a origem da chamada/registro conforme evidência e então reconstruir e testar.
+
+## Arquivos e evidências já analisados
+
+Um artefato de diagnóstico do workflow `41357951468` contém fontes gerados, incluindo:
+- `pacman_colors_recomp.167.cpp`
+- `pacman_colors_recomp.35.cpp`
+- `pacman_colors_register.cpp`
+- `pacman_colors_init.cpp`
+- `pacman_colors_funcs.h`
+
+Os registros e inicializadores confirmam a ausência de uma entrada de função em `0x82738920`.
+
+Workflow anterior:
+- Run: https://github.com/marcussilvacastrooutlok-afk/RecompPacman/actions/runs/41357951468
+- Commit do run: `61ac5150836a63a15322ce84af98d1b6d88c5891`
+- Artefatos: `pacman-android-apk` e `diagnostico-pacman`
+- Esse APK ainda fechava; não tratá-lo como versão corrigida.
+
+## Histórico de erros — não voltar a tratar como causa principal sem nova evidência
+
+Erros antigos incluíram reserva de espaço de memória guest de 4 GB, bibliotecas SDL/ReXRuntime ausentes, divergência SDL Java/C e métodos JNI ausentes. O diagnóstico mais recente e específico é a chamada indireta inválida em `sub_8262C898`, com destino `0x82738920`.
+
+## Regras para continuar
+
+- Não dizer que o problema foi resolvido até existir build e teste confirmados.
+- Não registrar `0x82738920` como função sem provar que isso é correto.
+- Não pedir novamente o arquivo do jogo ou dados já fornecidos.
+- O arquivo privado `Default.xex` e seus dados não devem ser adicionados ao repositório nem a artefatos públicos.
+- Registrar aqui novos commits, workflows, logs, hipóteses confirmadas e próximos passos sempre que o estado mudar.
