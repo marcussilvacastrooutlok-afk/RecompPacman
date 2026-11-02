@@ -83,3 +83,14 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
 - Documentação isolada não deve disparar compilação.
 - Não pedir para instalar APK sem alteração funcional/diagnóstica real e artefato confirmado.
 - O projeto deve continuar sendo uma recompilação nativa, não um emulador.
+
+
+## Instrumentação do cadastro de callbacks — próxima compilação
+
+- O diagnóstico do APK #75 confirmou que o trap ocorre na entrada 53 da tabela global de callbacks: base 0x834808D0, stride de 20 bytes, slot em 0x83480CF4.
+- A rotina gerada `sub_8262C828` é a rotina que grava novos registros: r4 é o destino/callback; r5, r6 e r7 são os demais campos do registro; o contador fica em 0x83482808.
+- O endereço inválido observado, 0x82738920, é um endereço interno de retorno em `sub_827388A8`, portanto não deve ser registrado como função.
+- O workflow foi alterado para instrumentar a entrada de `sub_8262C828` com tag Android `ReXCallbackReg`, registrando índice e r4-r7 antes de gravar cada entrada. Também adiciona link explícito da biblioteca Android `log` ao alvo gerado `pacman_colors`.
+- Commit da alteração do workflow: ad5fa2234b626db1cdc322e6d222362f6fad47da.
+- Objetivo do próximo teste: comparar a linha de cadastro do índice 53 com o valor encontrado no trap. Se o cadastro já mostrar target=0x82738920, o ponteiro foi fornecido errado ao registrar; se mostrar outro valor, investigar sobrescrita posterior do slot.
+- A compilação foi disparada pelo push; verificar o resultado e validar o APK antes de solicitar instalação. O usuário não precisa repetir testes anteriores.
