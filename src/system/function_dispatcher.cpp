@@ -15,6 +15,10 @@
 
 #include <cstdio>
 
+#if defined(__ANDROID__)
+#include <android/log.h>
+#endif
+
 #include <rex/assert.h>
 #include <rex/dbg.h>
 #include <rex/logging.h>
@@ -37,8 +41,23 @@ FunctionDispatcher* GetBoundFunctionDispatcher() {
 }  // namespace
 
 static void InvalidFunctionTrap(PPCContext& ctx, uint8_t* /*base*/) {
-  // Write directly to stderr before the fatal logger/abort so Android logcat
-  // has an independent, immediately flushed copy of the guest fault context.
+  // Android stderr is not reliably forwarded to logcat for native app crashes.
+  // Use liblog so the guest fault context is persisted before the fatal abort.
+#if defined(__ANDROID__)
+  __android_log_print(
+      ANDROID_LOG_ERROR, "ReXDispatch",
+      "[REX_DISPATCH_FATAL] target=0x%08X lr=0x%016llX "
+      "probable_callsite=0x%08X ctr=0x%016llX r11=0x%016llX "
+      "r31=0x%016llX r12=0x%016llX r3=0x%016llX",
+      ctx.last_indirect_target,
+      static_cast<unsigned long long>(ctx.lr),
+      static_cast<uint32_t>(ctx.lr - 4),
+      static_cast<unsigned long long>(ctx.ctr.u64),
+      static_cast<unsigned long long>(ctx.r11.u64),
+      static_cast<unsigned long long>(ctx.r31.u64),
+      static_cast<unsigned long long>(ctx.r12.u64),
+      static_cast<unsigned long long>(ctx.r3.u64));
+#else
   std::fprintf(
       stderr,
       "[REX_DISPATCH_FATAL] target=0x%08X lr=0x%016llX "
@@ -53,6 +72,7 @@ static void InvalidFunctionTrap(PPCContext& ctx, uint8_t* /*base*/) {
       static_cast<unsigned long long>(ctx.r12.u64),
       static_cast<unsigned long long>(ctx.r3.u64));
   std::fflush(stderr);
+#endif
 
   // Keep the same fatal diagnostic in the ReXRuntime logger as well.
   REX_FATAL("Invalid indirect function: target=0x{:08X}, lr=0x{:016X}, "
