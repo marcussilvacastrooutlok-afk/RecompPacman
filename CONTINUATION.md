@@ -179,3 +179,13 @@ O usuário confirmou que outros jogos recompilados que utiliza consomem armazena
 3. Remover do workflow a cópia do XEX para `assets/game/`; modificar `getArguments()` para receber somente o caminho privado preparado.
 4. Validar no APK: sem nenhum `.xex`/asset de jogo; libs ARM64 presentes; app abre sem jogo; seletor persiste; cópia e início usam caminho correto.
 5. Só depois solicitar instalação no telefone e retomar diagnóstico R11/R31 com o APK instrumentado.
+
+
+## Registro de continuidade — 2026-11-02 (diagnóstico direto em stderr)
+
+- Commit: `236361a0e05c1be29897494226347b18c154dc41` — alteração em `src/system/function_dispatcher.cpp`.
+- A instrumentação existente de `r11`, `r31`, `ctr`, `lr`, `r12` e `r3` foi preservada.
+- Antes de chamar `REX_FATAL`, o trap agora escreve uma linha com prefixo `[REX_DISPATCH_FATAL]` diretamente em `stderr` usando `std::fprintf` e executa `std::fflush(stderr)`. Isso cria uma segunda via de diagnóstico, independente do logger do ReXRuntime.
+- Escopo: diagnóstico; nenhuma lógica de execução do jogo foi alterada.
+- **Validação pendente:** confirmar compilação Android ARM64 e obter um novo log do aparelho. Ainda não há confirmação de que o logcat capture a linha nem de que o crash foi corrigido.
+- Próximo passo: acompanhar o workflow disparado pelo commit; se a compilação concluir e o APK for publicado, pedir teste somente desse APK diagnóstico e coletar `adb logcat -b all -d -v threadtime`.
