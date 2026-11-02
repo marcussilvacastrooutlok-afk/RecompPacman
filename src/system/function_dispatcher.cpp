@@ -13,6 +13,8 @@
  *              role as a function dispatch table rather than a CPU emulator.
  */
 
+#include <cstdio>
+
 #include <rex/assert.h>
 #include <rex/dbg.h>
 #include <rex/logging.h>
@@ -35,9 +37,24 @@ FunctionDispatcher* GetBoundFunctionDispatcher() {
 }  // namespace
 
 static void InvalidFunctionTrap(PPCContext& ctx, uint8_t* /*base*/) {
-  // Keep the fault context in the fatal message: this path runs on the guest
-  // execution thread, where ordinary category logging may be filtered out.
-  // LR-4 is the likely PPC callsite for link-form indirect branches (bctrl/blrl).
+  // Write directly to stderr before the fatal logger/abort so Android logcat
+  // has an independent, immediately flushed copy of the guest fault context.
+  std::fprintf(
+      stderr,
+      "[REX_DISPATCH_FATAL] target=0x%08X lr=0x%016llX "
+      "probable_callsite=0x%08X ctr=0x%016llX r11=0x%016llX "
+      "r31=0x%016llX r12=0x%016llX r3=0x%016llX\n",
+      ctx.last_indirect_target,
+      static_cast<unsigned long long>(ctx.lr),
+      static_cast<uint32_t>(ctx.lr - 4),
+      static_cast<unsigned long long>(ctx.ctr.u64),
+      static_cast<unsigned long long>(ctx.r11.u64),
+      static_cast<unsigned long long>(ctx.r31.u64),
+      static_cast<unsigned long long>(ctx.r12.u64),
+      static_cast<unsigned long long>(ctx.r3.u64));
+  std::fflush(stderr);
+
+  // Keep the same fatal diagnostic in the ReXRuntime logger as well.
   REX_FATAL("Invalid indirect function: target=0x{:08X}, lr=0x{:016X}, "
             "probable_callsite=0x{:08X}, ctr=0x{:016X}, r11=0x{:016X}, "
             "r31=0x{:016X}, r12=0x{:016X}, r3=0x{:016X}",
