@@ -94,3 +94,13 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
 - Commit da alteração do workflow: ad5fa2234b626db1cdc322e6d222362f6fad47da.
 - Objetivo do próximo teste: comparar a linha de cadastro do índice 53 com o valor encontrado no trap. Se o cadastro já mostrar target=0x82738920, o ponteiro foi fornecido errado ao registrar; se mostrar outro valor, investigar sobrescrita posterior do slot.
 - A compilação foi disparada pelo push; verificar o resultado e validar o APK antes de solicitar instalação. O usuário não precisa repetir testes anteriores.
+
+
+## Diagnóstico do callback 53 — APK #77
+- O usuário testou o APK #77; o fechamento em tela preta continua ao iniciar o jogo.
+- O log `pacman-callbacks.txt` registra callbacks pelos índices 3, 5, 7... 49 e depois 54; não há registro do índice 53 pela rotina `sub_8262C828`.
+- Na falha, `ReXDispatch` confirma alvo `0x82738920`, slot `0x83480CF4` e chamada indireta em `0x8262C908`.
+- A rotina `sub_8262C828` grava o alvo no primeiro campo de cada registro e incrementa o contador em `0x83482808`. Cada registro ocupa 20 bytes; o registro 53 usa o destino em `0x83480CF4`.
+- Nova etapa no workflow instrumenta a leitura do registro 53 imediatamente antes da chamada indireta, registrando contador, destino, argumentos, estado e campos restantes. A próxima coleta terá a tag `ReXCallback53`.
+- Não registrar `0x82738920` como função: é endereço interno de código/retorno, não entrada de função.
+- Estado: causa ainda não corrigida; próxima compilação é diagnóstica.
