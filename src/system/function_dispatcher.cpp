@@ -39,9 +39,10 @@ static void InvalidFunctionTrap(PPCContext& ctx, uint8_t* /*base*/) {
   // execution thread, where ordinary category logging may be filtered out.
   // LR-4 is the likely PPC callsite for link-form indirect branches (bctrl/blrl).
   REX_FATAL("Invalid indirect function: target=0x{:08X}, lr=0x{:016X}, "
-            "probable_callsite=0x{:08X}, ctr=0x{:016X}, r12=0x{:016X}, r3=0x{:016X}",
+            "probable_callsite=0x{:08X}, ctr=0x{:016X}, r11=0x{:016X}, "
+            "r31=0x{:016X}, r12=0x{:016X}, r3=0x{:016X}",
             ctx.last_indirect_target, ctx.lr, static_cast<uint32_t>(ctx.lr - 4),
-            ctx.ctr.u64, ctx.r12.u64, ctx.r3.u64);
+            ctx.ctr.u64, ctx.r11.u64, ctx.r31.u64, ctx.r12.u64, ctx.r3.u64);
 }
 
 PPCFunc* ResolveIndirectFunction(uint32_t guest_address) {
