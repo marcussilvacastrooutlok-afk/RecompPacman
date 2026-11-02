@@ -108,3 +108,37 @@ Erros antigos incluíram reserva de espaço de memória guest de 4 GB, bibliotec
 - Não pedir novamente o arquivo do jogo ou dados já fornecidos.
 - O arquivo privado `Default.xex` e seus dados não devem ser adicionados ao repositório nem a artefatos públicos.
 - Registrar aqui novos commits, workflows, logs, hipóteses confirmadas e próximos passos sempre que o estado mudar.
+
+
+## Registro de continuidade — 2026-11-02 (run 41375019134)
+
+### Resultado confirmado do build Android
+
+- Workflow: `Recompilar Pac-Man para Android`
+- Run: https://github.com/marcussilvacastrooutlok-afk/RecompPacman/actions/runs/41375019134
+- Commit usado: `461f0a2a933bd217befcf0540755008794c4701f`
+- Resultado: `success`; todas as etapas, incluindo compilação ARM64, empacotamento SDL3, diagnósticos e upload, terminaram com sucesso.
+- Artefato publicado: `pacman-android-apk`, ZIP de aproximadamente 118,8 MB; APK extraído: `pacman-android-arm64-debug.apk`, aproximadamente 119,6 MB.
+- Artefato de diagnóstico também publicado: `diagnostico-pacman`.
+- O APK contém as bibliotecas ARM64 `libSDL3.so`, `libmain.so`, `librexruntime.so` e `librexgpu-xenos.so`.
+
+### Bloqueio de distribuição identificado por inspeção do APK
+
+O APK foi baixado e inspecionado diretamente. Ele contém:
+
+```text
+assets/game/default.xex  8.970.240 bytes
+```
+
+O conteúdo confirma que o XEX está embutido no APK. O workflow copia explicitamente `$GITHUB_WORKSPACE/default.xex` para `android-package/app/src/main/assets/game/default.xex` e altera `SDLActivity.getArguments()` para copiar esse asset ao armazenamento privado e passar `--game_data_root`.
+
+**Conclusão:** o APK é um artefato de build ARM64 confirmado, mas não atende ao requisito de selecionar a pasta do jogo no armazenamento do telefone e não deve ser considerado versão final para distribuição/instalação. Não foi feito teste de execução deste APK neste ciclo. A presença do XEX no repositório público e no APK permanece uma questão de proteção/distribuição a tratar; não remover ou alterar visibilidade sem autorização explícita.
+
+### Próximas ações obrigatórias
+
+1. Alterar o workflow para usar o XEX somente no codegen/build host e não copiá-lo para `assets/` do APK.
+2. Implementar um seletor Android real (Storage Access Framework) para escolher a pasta do jogo, persistir a permissão URI e fornecer acesso compatível ao runtime; a simples alteração de `--game_data_root` para um caminho de arquivo comum não é suficiente para URIs SAF.
+3. Validar que o APK final não contém `.xex`, que mantém as quatro bibliotecas ARM64 e que inicia sem arquivos do jogo, oferecendo a seleção da pasta.
+4. Depois disso, investigar o crash de dispatch indireto usando a instrumentação R11/R31 já registrada acima. O run atual usou o commit `461f0a2a`, anterior à instrumentação `7fa12ff9`; portanto, este APK não contém o diagnóstico R11/R31.
+5. Registrar o novo commit/run e só solicitar teste no telefone quando houver APK adequado.
+
