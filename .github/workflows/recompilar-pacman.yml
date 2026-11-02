@@ -223,6 +223,43 @@ jobs:
           print("Instrumentação de cadastro instalada em:", matches[0])
           PY
 
+      - name: Instrumentar leitura do callback 53
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("pacman_project/generated/default")
+          marker = "REX_CALL_INDIRECT_FUNC(ctx.ctr.u32, 0x8262C908);"
+          matches = []
+          for path in root.glob("pacman_colors_recomp.*.cpp"):
+              source = path.read_text()
+              if marker not in source:
+                  continue
+              if "DEFINE_REX_FUNC(sub_8262C898) {" not in source:
+                  continue
+              if "#include <android/log.h>" not in source:
+                  lines = source.splitlines()
+                  lines.insert(1, "#include <android/log.h>")
+                  source = "\n".join(lines) + "\n"
+              diagnostic = """if (ctx.r31.u32 == 0x83480CF4) {
+          \t__android_log_print(ANDROID_LOG_ERROR, "ReXCallback53",
+          \t    "count=%u slot=0x%08X target=0x%08X arg0=0x%08X arg5=0x%08X state=%u field12=0x%08X field16=0x%08X",
+          \t    REX_LOAD_U32(0x83482808), ctx.r31.u32,
+          \t    REX_LOAD_U32(ctx.r31.u32), REX_LOAD_U32(ctx.r31.u32 - 4),
+          \t    REX_LOAD_U32(ctx.r31.u32 + 4), REX_LOAD_U8(ctx.r31.u32 + 8),
+          \t    REX_LOAD_U32(ctx.r31.u32 + 12), REX_LOAD_U32(ctx.r31.u32 + 16));
+          }
+          """ + marker
+              if source.count(marker) != 1:
+                  raise SystemExit(f"Chamada indireta inesperada em {path}")
+              source = source.replace(marker, diagnostic, 1)
+              path.write_text(source)
+              matches.append(str(path))
+          if len(matches) != 1:
+              raise SystemExit(f"Esperava uma definição de sub_8262C898; encontrados: {matches}")
+          print("Leitura do registro 53 instrumentada:", matches[0])
+          PY
+
       - name: Verificar Android NDK
         run: |
           if [ -z "$ANDROID_NDK_LATEST_HOME" ]; then
