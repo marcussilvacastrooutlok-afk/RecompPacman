@@ -129,3 +129,18 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
 - O contador salta entre os valores registrados; isso sugere que há atualizações do contador/registro por outro caminho ou que nem todas as entradas passam pela rotina instrumentada. Ainda não foi localizada a origem do índice 53.
 - Próxima alteração diagnóstica: durante a etapa de preparação do artefato, varrer todas as funções geradas e preservar as funções que referenciam diretamente os endereços da tabela ou o padrão de base `+2248` com contador `+8000`. O relatório será `diagnosticos/referencias-tabela-callbacks.txt`.
 - Não há correção funcional ainda; não pedir instalação do APK até avaliar o relatório e produzir uma alteração que justifique novo teste.
+
+
+## Investigação do artefato diagnóstico #82 — 2026-11-03
+
+- O artefato `diagnostico-pacman` do Workflow #82 foi baixado e inspecionado.
+- A busca independente nos quatro shards preservados encontrou apenas duas funções com referências à tabela global:
+  - `sub_8262C828`: lê e incrementa o contador em `0x83482808`, grava os campos do registro com stride de 20 bytes.
+  - `sub_8262C898`: percorre os registros e despacha o callback.
+- Não foi encontrado, entre os arquivos preservados do #82, um segundo gravador explícito do contador. Isso não prova que não exista outro caminho em shards que não foram preservados.
+- O log anterior do #82 apontou `caller_lr=0x82DA25A8`, mas o shard que contém esse endereço não estava no artefato #82. Por isso, ainda não é possível identificar o chamador.
+- Alteração de coleta feita no workflow:
+  - Commit `c14eb341223a8126af6e447b4a34d236afcb6170`: acrescenta busca de contexto para `0x82DA25A8` e preserva o shard que contiver esse endereço.
+  - Commit `7771369ca45350c694830cd68abfe2074aed8328`: corrige as continuações de linha shell da nova busca.
+- Próximo passo: aguardar/identificar o próximo artefato `diagnostico-pacman`, verificar `caller-callback.txt` e o shard adicional, e então rastrear o chamador de `sub_8262C828`.
+- A alteração é exclusivamente diagnóstica. Não houve correção funcional nem novo APK para teste do usuário.
