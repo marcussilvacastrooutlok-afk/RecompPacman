@@ -110,3 +110,12 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
 - O endereço inválido está presente no registro imediatamente antes da chamada indireta; portanto, o trap apenas revela um ponteiro já armazenado.
 - No código gerado, sub_827388A8 é um alocador/rotina de inicialização de objeto. O endereço 0x82738920 é o LR configurado no ramo de falha dessa rotina antes de chamar sub_8234D1F0; não é uma entrada de função válida.
 - A próxima instrumentação acrescenta caller_lr ao log ReXCallbackReg para identificar quem chama sub_8262C828 e quem fornece target 0x82738920. Ainda não foi aplicada correção funcional.
+
+## Atualização — workflow #82 (2026-11-03)
+- Commit: b583fdc3b69014152fe38c329dd52c12a99ce6c9.
+- Corrigida a instrumentação de `sub_8262C828`: `ctx.lr.u32` foi substituído por `(uint32_t)ctx.lr`, pois LR é armazenado como valor numérico e não como membro com `.u32`.
+- Workflow de build #82: sucesso. Compilação ARM64, empacotamento SDL3, assinatura e publicação do APK passaram.
+- APK: artefato `pacman-android-apk`, ID 13198209998, cerca de 109,8 MB.
+- Diagnóstico: artefato `diagnostico-pacman`, ID 13198920206.
+- Esta alteração é apenas diagnóstica; não corrige ainda o callback 53 nem comprova que o jogo inicia.
+- Próxima etapa: testar o APK #82, iniciar o jogo e recolher `ReXCallbackReg`, `ReXCallback53` e `ReXDispatch` para identificar o LR de quem cadastra o callback e confirmar o valor gravado no slot 53.
