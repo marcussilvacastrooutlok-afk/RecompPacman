@@ -513,35 +513,35 @@ jobs:
           if [ -d "$GENERATED" ]; then
             echo "=== Referencias a tabela global de callbacks ===" >> diagnosticos/resumo.txt
             python3 - <<'PY'
-from pathlib import Path
-import re
-
-root = Path("pacman_project/generated/default")
-out = Path("diagnosticos/referencias-tabela-callbacks.txt")
-function_re = re.compile(r"DEFINE_REX_FUNC\(([^)]+)\) \{")
-hits = []
-for path in sorted(root.glob("pacman_colors_recomp.*.cpp")):
-    source = path.read_text(errors="replace")
-    starts = list(function_re.finditer(source))
-    for i, match in enumerate(starts):
-        end = starts[i + 1].start() if i + 1 < len(starts) else len(source)
-        block = source[match.start():end]
-        lines = block.splitlines()
-        joined = "\n".join(lines)
-        explicit = any(x in joined for x in ("0x83482808", "0x834808C8", "0x834808D0", "0x83480CF4"))
-        has_base = bool(re.search(r"addi\s+r\d+,r\d+,2248", joined))
-        has_count_offset = bool(re.search(r"(?:lwz|stw)\s+r\d+,8000\(r\d+\)", joined))
-        if explicit or (has_base and has_count_offset):
-            hits.append((path.name, match.group(1), block))
-with out.open("w") as f:
-    f.write("Funcoes que referenciam a base/contador da tabela de callbacks.\n")
-    f.write("A busca inclui enderecos absolutos e padroes de base +2248 / contador +8000.\n")
-    f.write(f"Total de funcoes encontradas: {len(hits)}\n\n")
-    for filename, name, block in hits:
-        f.write(f"===== {filename} :: {name} =====\n")
-        f.write(block)
-        f.write("\n\n")
-print(f"Relatorio criado: {out} ({len(hits)} funcoes)")
+          from pathlib import Path
+          import re
+          
+          root = Path("pacman_project/generated/default")
+          out = Path("diagnosticos/referencias-tabela-callbacks.txt")
+          function_re = re.compile(r"DEFINE_REX_FUNC\(([^)]+)\) \{")
+          hits = []
+          for path in sorted(root.glob("pacman_colors_recomp.*.cpp")):
+              source = path.read_text(errors="replace")
+              starts = list(function_re.finditer(source))
+              for i, match in enumerate(starts):
+                  end = starts[i + 1].start() if i + 1 < len(starts) else len(source)
+                  block = source[match.start():end]
+                  lines = block.splitlines()
+                  joined = "\n".join(lines)
+                  explicit = any(x in joined for x in ("0x83482808", "0x834808C8", "0x834808D0", "0x83480CF4"))
+                  has_base = bool(re.search(r"addi\s+r\d+,r\d+,2248", joined))
+                  has_count_offset = bool(re.search(r"(?:lwz|stw)\s+r\d+,8000\(r\d+\)", joined))
+                  if explicit or (has_base and has_count_offset):
+                      hits.append((path.name, match.group(1), block))
+          with out.open("w") as f:
+              f.write("Funcoes que referenciam a base/contador da tabela de callbacks.\n")
+              f.write("A busca inclui enderecos absolutos e padroes de base +2248 / contador +8000.\n")
+              f.write(f"Total de funcoes encontradas: {len(hits)}\n\n")
+              for filename, name, block in hits:
+                  f.write(f"===== {filename} :: {name} =====\n")
+                  f.write(block)
+                  f.write("\n\n")
+          print(f"Relatorio criado: {out} ({len(hits)} funcoes)")
 PY
             echo "=== Busca global do trap ===" >> diagnosticos/resumo.txt
             grep -R -n -E 'sub_8262C898|82738920|8262C898' "$GENERATED" \
