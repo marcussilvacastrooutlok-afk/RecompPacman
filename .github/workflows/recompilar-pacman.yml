@@ -544,7 +544,11 @@ jobs:
           print(f"Relatorio criado: {out} ({len(hits)} funcoes)")
 PY
             echo "=== Busca global do trap ===" >> diagnosticos/resumo.txt
-            grep -R -n -E 'sub_8262C898|82738920|8262C898' "$GENERATED" \
+            echo "=== Contexto do chamador do callback (LR 0x82DA25A8) ===" >> diagnosticos/resumo.txt
+            grep -R -n -C 12 -E "82DA25A8" "$GENERATED" \\
+              --include="*.cpp" --include="*.h" \\
+              > diagnosticos/caller-callback.txt || true
+            grep -R -n -E 'sub_8262C898|82738920|8262C898|82DA25A8' "$GENERATED" \
               --include='*.cpp' --include='*.h' \
               > diagnosticos/enderecos-trap.txt || true
             echo "=== Arquivos gerados e tamanhos ===" >> diagnosticos/resumo.txt
@@ -557,7 +561,7 @@ PY
               [ -f "$SOURCE" ] || continue
               BASE="$(basename "$SOURCE")"
               cp "$SOURCE" "diagnosticos/$BASE"
-            done < <(grep -R -l -E 'sub_8262C898|82738920|8262C898' "$GENERATED" \
+            done < <(grep -R -l -E 'sub_8262C898|82738920|8262C898|82DA25A8' "$GENERATED" \
               --include='*.cpp' --include='*.h' || true)
             for SOURCE in "$GENERATED"/*init*.cpp "$GENERATED"/*register*.cpp \
                           "$GENERATED"/*init*.h "$GENERATED"/*register*.h; do
