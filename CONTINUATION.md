@@ -119,3 +119,13 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
 - Diagnóstico: artefato `diagnostico-pacman`, ID 13198920206.
 - Esta alteração é apenas diagnóstica; não corrige ainda o callback 53 nem comprova que o jogo inicia.
 - Próxima etapa: testar o APK #82, iniciar o jogo e recolher `ReXCallbackReg`, `ReXCallback53` e `ReXDispatch` para identificar o LR de quem cadastra o callback e confirmar o valor gravado no slot 53.
+
+
+## Análise do log do APK #82 e próxima investigação (2026-11-03)
+- O arquivo `pacman-callback82.txt` confirmou que `sub_8262C828` registra callbacks com chamador `caller_lr=0x82DA25A8`, mas os valores `count_before` observados saltam (por exemplo 49 para 54 e 62 para 63). O índice 53 não aparece nos logs dessa rotina.
+- Imediatamente antes do despacho, `ReXCallback53` confirmou `count=63`, `slot=0x83480CF4`, `target=0x82738920`, `arg0=0x833AB458`, `arg5=0x82738AA0`, estado 0 e campos 12/16 zerados.
+- `ReXDispatch` confirmou chamada indireta em `0x8262C908`, com destino `0x82738920` e slot `0x83480CF4`.
+- A inspeção do código gerado mostra que `sub_8262C828` calcula a tabela na base `0x834808C8`, grava cada registro com stride de 20 bytes e incrementa o contador em `0x83482808`. `sub_8262C898` percorre os registros e chama o primeiro campo quando o estado do registro é zero.
+- O contador salta entre os valores registrados; isso sugere que há atualizações do contador/registro por outro caminho ou que nem todas as entradas passam pela rotina instrumentada. Ainda não foi localizada a origem do índice 53.
+- Próxima alteração diagnóstica: durante a etapa de preparação do artefato, varrer todas as funções geradas e preservar as funções que referenciam diretamente os endereços da tabela ou o padrão de base `+2248` com contador `+8000`. O relatório será `diagnosticos/referencias-tabela-callbacks.txt`.
+- Não há correção funcional ainda; não pedir instalação do APK até avaliar o relatório e produzir uma alteração que justifique novo teste.
