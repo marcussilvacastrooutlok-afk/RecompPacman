@@ -104,3 +104,9 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
 - Nova etapa no workflow instrumenta a leitura do registro 53 imediatamente antes da chamada indireta, registrando contador, destino, argumentos, estado e campos restantes. A próxima coleta terá a tag `ReXCallback53`.
 - Não registrar `0x82738920` como função: é endereço interno de código/retorno, não entrada de função.
 - Estado: causa ainda não corrigida; próxima compilação é diagnóstica.
+
+## Diagnóstico do Workflow #79 — registro 53
+- O log enviado do APK #79 confirma: count=63, slot=0x83480CF4, target=0x82738920, arg0=0x833AB458, arg5=0x82738AA0, state=0, field12=0, field16=0.
+- O endereço inválido está presente no registro imediatamente antes da chamada indireta; portanto, o trap apenas revela um ponteiro já armazenado.
+- No código gerado, sub_827388A8 é um alocador/rotina de inicialização de objeto. O endereço 0x82738920 é o LR configurado no ramo de falha dessa rotina antes de chamar sub_8234D1F0; não é uma entrada de função válida.
+- A próxima instrumentação acrescenta caller_lr ao log ReXCallbackReg para identificar quem chama sub_8262C828 e quem fornece target 0x82738920. Ainda não foi aplicada correção funcional.
