@@ -212,8 +212,8 @@ jobs:
                   source = "\n".join(lines) + "\n"
               diagnostic = prologue + """
           \t__android_log_print(ANDROID_LOG_ERROR, "ReXCallbackReg",
-          \t    "index=%u target=0x%08X arg5=0x%08X arg6=0x%08X arg7=0x%08X",
-          \t    REX_LOAD_U32(0x83482808), ctx.r4.u32, ctx.r5.u32,
+          \t    "count_before=%u caller_lr=0x%08X target=0x%08X arg5=0x%08X arg6=0x%08X arg7=0x%08X",
+          \t    REX_LOAD_U32(0x83482808), ctx.lr.u32, ctx.r4.u32, ctx.r5.u32,
           \t    ctx.r6.u32, ctx.r7.u32);"""
               source = source.replace(prologue, diagnostic, 1)
               path.write_text(source)
