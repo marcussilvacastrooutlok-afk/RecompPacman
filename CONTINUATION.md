@@ -144,3 +144,28 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
   - Commit `7771369ca45350c694830cd68abfe2074aed8328`: corrige as continuações de linha shell da nova busca.
 - Próximo passo: aguardar/identificar o próximo artefato `diagnostico-pacman`, verificar `caller-callback.txt` e o shard adicional, e então rastrear o chamador de `sub_8262C828`.
 - A alteração é exclusivamente diagnóstica. Não houve correção funcional nem novo APK para teste do usuário.
+
+
+## Atualização — Workflow #99 concluído (2026-11-04)
+
+- Commit do workflow: `d94629874762fac1d13230315078c504ed86b2b7` — `Corrigir tabs literais na instrumentação C++`.
+- Corrigidos nove escapes duplicados `\\\\t` no workflow para que a instrumentação Python gere tabulações reais no código C++.
+- Workflow de build #99, run ID `41781179314`: `completed/success`.
+- Lint #99, run ID `41781178969`: `completed/success`.
+- Build ARM64, Gradle, assinatura APK e verificação de bibliotecas passaram.
+- APK publicado: artefato `pacman-android-apk`, ID `13300981941`, arquivo `pacman-android-arm64-debug.apk` (110.597.432 bytes; SHA-256 `0bf9995a0b721ddb4e79189c335946a44ece52f38d623339f3369798e1169604`).
+- APK inclui `libSDL3.so`, `libmain.so`, `librexruntime.so` e `librexgpu-xenos.so` em `arm64-v8a`. Ícone mipmap do launcher foi gerado com Pac-Man.
+- Artefato diagnóstico: `diagnostico-pacman`, ID `13301156733`. Inclui `pacman_colors_recomp.167.cpp`, `.35.cpp`, `.64.cpp`, `.78.cpp`, `.82.cpp`, `pacman_colors_init.cpp`, `pacman_colors_register.cpp`, headers e contexto do chamador.
+- Instrumentação incluída:
+  - `ReXSlot53 BEFORE`: antes do cadastro, quando o contador é 53, registra LR e r4-r7/target anterior.
+  - `ReXSlot53 AFTER`: depois da gravação do registro 53, quando o contador passa a 54, registra target, argumentos e campos do registro.
+  - `ReXCallback53`: antes do despacho, registra contador, endereço do slot e os campos do registro 53.
+  - `ReXSlot53 WRITER init_list`: observa as chamadas indiretas da lista de inicialização quando o contador é 54; não confundir esta observação com prova de escrita na tabela.
+- Verificação estática do artefato #99: a rotina `sub_8262C828` grava o destino em `r4), os outros campos em r5-r7, atualiza o contador em `0x83482808` e grava o estado zero. O registro 53 começa em `0x83480CF4`; a instrumentação de leitura do dispatcher compara esse endereço.
+- O endereço `0x82738920` continua identificado como LR/endereço interno no ramo de `sub_827388A8` antes de chamar `sub_8234D1F0`, não como início de função. Não adicionar stub/registro artificial para esse endereço.
+- Importante: o artefato #99 contém código e APK, mas ainda não contém log de execução do aparelho. Portanto, os novos valores `BEFORE/AFTER` e a origem final do ponteiro ainda precisam ser coletados em runtime.
+- Próximo passo: o usuário deve instalar/testar o APK #99, selecionar a pasta do jogo e iniciar uma vez. Depois, recolher o logcat completo (não filtrar apenas tags, para preservar o crash):
+  `adb logcat -d -v threadtime > /sdcard/Download/pacman-workflow99-full.txt`
+  Enviar esse arquivo para análise. Procurar as tags `ReXSlot53`, `ReXCallback53`, `ReXInitList`, `ReXCallbackReg` e `ReXDispatch`.
+- Se o Android rejeitar a instalação por conflito de assinatura com APK de teste anterior, desinstalar a versão anterior do Pac-Man e instalar o APK #99; os arquivos do jogo na pasta Download não devem ser apagados.
+- Não considerar o jogo corrigido até o teste real. Não alterar a lógica do jogo nem registrar artificialmente `0x82738920`.
