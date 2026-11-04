@@ -273,21 +273,21 @@ jobs:
               source = path.read_text()
               if marker not in source:
                   continue
-              prologue = marker + "\\n\\tREX_FUNC_PROLOGUE();"
+              prologue = marker + "\n\tREX_FUNC_PROLOGUE();"
               if source.count(prologue) != 1 or source.count(call) != 1:
                   raise SystemExit(f"Estrutura inesperada em {path}")
               if "#include <android/log.h>" not in source:
                   lines = source.splitlines()
                   lines.insert(1, "#include <android/log.h>")
-                  source = "\\n".join(lines) + "\\n"
+                  source = "\n".join(lines) + "\n"
               diagnostic = prologue + """
-          \\t__android_log_print(ANDROID_LOG_ERROR, "ReXInitList",
-          \\t    "table=0x833A0F44 entries=%08X,%08X,%08X,%08X",
-          \\t    REX_LOAD_U32(0x833A0F44), REX_LOAD_U32(0x833A0F48),
-          \\t    REX_LOAD_U32(0x833A0F4C), REX_LOAD_U32(0x833A0F50));"""
+          \t__android_log_print(ANDROID_LOG_ERROR, "ReXInitList",
+          \t    "table=0x833A0F44 entries=%08X,%08X,%08X,%08X",
+          \t    REX_LOAD_U32(0x833A0F44), REX_LOAD_U32(0x833A0F48),
+          \t    REX_LOAD_U32(0x833A0F4C), REX_LOAD_U32(0x833A0F50));"""
               source = source.replace(prologue, diagnostic, 1)
               call_diag = """__android_log_print(ANDROID_LOG_ERROR, "ReXInitList",
-          \\t    "dispatch slot=0x%08X target=0x%08X", ctx.r31.u32, ctx.ctr.u32);
+          \t    "dispatch slot=0x%08X target=0x%08X", ctx.r31.u32, ctx.ctr.u32);
           """ + call
               source = source.replace(call, call_diag, 1)
               path.write_text(source)
