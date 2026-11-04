@@ -211,12 +211,12 @@ jobs:
                   lines.insert(1, "#include <android/log.h>")
                   source = "\n".join(lines) + "\n"
               diagnostic = prologue + """
-          \\tif (REX_LOAD_U32(0x83482808) == 53) {
-          \\t    __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
-          \\t        "BEFORE count=53 caller_lr=0x%08X r4_target=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X old_target=0x%08X",
-          \\t        (uint32_t)ctx.lr, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32, ctx.r7.u32,
-          \\t        REX_LOAD_U32(0x83480CF4));
-          \\t}"""
+          \tif (REX_LOAD_U32(0x83482808) == 53) {
+          \t    __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
+          \t        "BEFORE count=53 caller_lr=0x%08X r4_target=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X old_target=0x%08X",
+          \t        (uint32_t)ctx.lr, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32, ctx.r7.u32,
+          \t        REX_LOAD_U32(0x83480CF4));
+          \t}"""
               source = source.replace(prologue, diagnostic, 1)
               store_marker = "REX_STORE_U8(ctx.r9.u32 + ctx.r29.u32, ctx.r28.u8);"
               after_store = store_marker + chr(10) + """
@@ -302,9 +302,9 @@ jobs:
               source = source.replace(prologue, diagnostic, 1)
               call_diag = call + """
           if (REX_LOAD_U32(0x83482808) == 54) {
-          \\t__android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
-          \\t    "WRITER init_list_slot=0x%08X init_target=0x%08X count=54",
-          \\t    ctx.r31.u32, ctx.ctr.u32);
+          \t__android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
+          \t    "WRITER init_list_slot=0x%08X init_target=0x%08X count=54",
+          \t    ctx.r31.u32, ctx.ctr.u32);
           }
           """
               source = source.replace(call, call_diag, 1)
