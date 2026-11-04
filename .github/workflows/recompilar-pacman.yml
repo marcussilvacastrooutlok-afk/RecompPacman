@@ -191,7 +191,7 @@ jobs:
           PY
 
 
-      - name: Instrumentar cadastro de callbacks do Pac-Man
+      - name: Instrumentar gravação real da tabela de callbacks
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -210,33 +210,37 @@ jobs:
                   lines = source.splitlines()
                   lines.insert(1, "#include <android/log.h>")
                   source = "\n".join(lines) + "\n"
-              diagnostic = prologue + """
-          \tif (REX_LOAD_U32(0x83482808) == 53) {
-          \t    __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
-          \t        "BEFORE count=53 caller_lr=0x%08X r4_target=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X old_target=0x%08X",
-          \t        (uint32_t)ctx.lr, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32, ctx.r7.u32,
-          \t        REX_LOAD_U32(0x83480CF4));
-          \t}"""
-              source = source.replace(prologue, diagnostic, 1)
-              store_marker = "REX_STORE_U8(ctx.r9.u32 + ctx.r29.u32, ctx.r28.u8);"
-              after_store = store_marker + chr(10) + """
-          if (REX_LOAD_U32(0x83482808) == 54) {
-              __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
-                  "AFTER count=54 target=0x%08X arg0=0x%08X arg5=0x%08X state=%u field12=0x%08X field16=0x%08X",
-                  REX_LOAD_U32(0x83480CF4), REX_LOAD_U32(0x83480CF0),
-                  REX_LOAD_U32(0x83480CF8), REX_LOAD_U8(0x83480CFC),
-                  REX_LOAD_U32(0x83480D00), REX_LOAD_U32(0x83480D04));
-          }"""
+              entry_diag = prologue + """
+          \t__android_log_print(ANDROID_LOG_ERROR, "ReXCbWrite",
+          \t    "ENTER count=%u caller_lr=0x%08X r4_target=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X",
+          \t    REX_LOAD_U32(0x83482808), (uint32_t)ctx.lr,
+          \t    ctx.r4.u32, ctx.r5.u32, ctx.r6.u32, ctx.r7.u32);"""
+              source = source.replace(prologue, entry_diag, 1)
+              store_marker = "REX_STORE_U32(ctx.r9.u32 + ctx.r8.u32, ctx.r4.u32);"
               if source.count(store_marker) != 1:
-                  raise SystemExit(f"Store de estado inesperado em {path}")
-              source = source.replace(store_marker, after_store, 1)
+                  raise SystemExit(f"Store do target inesperado em {path}")
+              store_diag = """uint32_t pacman_callback_slot_address = ctx.r9.u32 + ctx.r8.u32;
+          if (pacman_callback_slot_address == 0x83480CF4 || ctx.r4.u32 == 0x82738920) {
+              __android_log_print(ANDROID_LOG_ERROR, "ReXCbWrite",
+                  "BEFORE slot=0x%08X count=%u caller_lr=0x%08X target=0x%08X old=0x%08X arg_r5=0x%08X arg_r6=0x%08X arg_r7=0x%08X",
+                  pacman_callback_slot_address, REX_LOAD_U32(0x83482808),
+                  (uint32_t)ctx.lr, ctx.r4.u32, REX_LOAD_U32(pacman_callback_slot_address),
+                  ctx.r5.u32, ctx.r6.u32, ctx.r7.u32);
+          }
+          REX_STORE_U32(ctx.r9.u32 + ctx.r8.u32, ctx.r4.u32);
+          if (pacman_callback_slot_address == 0x83480CF4 || ctx.r4.u32 == 0x82738920) {
+              __android_log_print(ANDROID_LOG_ERROR, "ReXCbWrite",
+                  "AFTER slot=0x%08X count=%u target_now=0x%08X",
+                  pacman_callback_slot_address, REX_LOAD_U32(0x83482808),
+                  REX_LOAD_U32(pacman_callback_slot_address));
+          }"""
+              source = source.replace(store_marker, store_diag, 1)
               path.write_text(source)
               matches.append(str(path))
           if len(matches) != 1:
               raise SystemExit(f"Esperava exatamente uma definição de sub_8262C828; encontrei {matches}")
-          print("Instrumentação de cadastro instalada em:", matches[0])
+          print("Instrumentação por endereço real de destino instalada em:", matches[0])
           PY
-
       - name: Instrumentar leitura do callback 53
         run: |
           python3 - <<'PY'
