@@ -218,9 +218,9 @@ jobs:
           \\t        REX_LOAD_U32(0x83480CF4));
           \\t}"""
               source = source.replace(prologue, diagnostic, 1)
-              store_marker = "\\tREX_STORE_U8(ctx.r9.u32 + ctx.r29.u32, ctx.r28.u8);"
+              store_marker = "REX_STORE_U8(ctx.r9.u32 + ctx.r29.u32, ctx.r28.u8);"
               after_store = store_marker + """
-          \\tif (REX_LOAD_U32(0x83482808) == 54) {
+          \\n          \\tif (REX_LOAD_U32(0x83482808) == 54) {
           \\t    __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
           \\t        "AFTER count=54 target=0x%08X arg0=0x%08X arg5=0x%08X state=%u field12=0x%08X field16=0x%08X",
           \\t        REX_LOAD_U32(0x83480CF4), REX_LOAD_U32(0x83480CF0),
