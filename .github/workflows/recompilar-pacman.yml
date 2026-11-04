@@ -219,14 +219,14 @@ jobs:
           \\t}"""
               source = source.replace(prologue, diagnostic, 1)
               store_marker = "REX_STORE_U8(ctx.r9.u32 + ctx.r29.u32, ctx.r28.u8);"
-              after_store = store_marker + """
-          \\n          \\tif (REX_LOAD_U32(0x83482808) == 54) {
-          \\t    __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
-          \\t        "AFTER count=54 target=0x%08X arg0=0x%08X arg5=0x%08X state=%u field12=0x%08X field16=0x%08X",
-          \\t        REX_LOAD_U32(0x83480CF4), REX_LOAD_U32(0x83480CF0),
-          \\t        REX_LOAD_U32(0x83480CF8), REX_LOAD_U8(0x83480CFC),
-          \\t        REX_LOAD_U32(0x83480D00), REX_LOAD_U32(0x83480D04));
-          \\t}"""
+              after_store = store_marker + chr(10) + """
+          if (REX_LOAD_U32(0x83482808) == 54) {
+              __android_log_print(ANDROID_LOG_ERROR, "ReXSlot53",
+                  "AFTER count=54 target=0x%08X arg0=0x%08X arg5=0x%08X state=%u field12=0x%08X field16=0x%08X",
+                  REX_LOAD_U32(0x83480CF4), REX_LOAD_U32(0x83480CF0),
+                  REX_LOAD_U32(0x83480CF8), REX_LOAD_U8(0x83480CFC),
+                  REX_LOAD_U32(0x83480D00), REX_LOAD_U32(0x83480D04));
+          }"""
               if source.count(store_marker) != 1:
                   raise SystemExit(f"Store de estado inesperado em {path}")
               source = source.replace(store_marker, after_store, 1)
