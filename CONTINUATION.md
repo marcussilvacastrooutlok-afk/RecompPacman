@@ -163,11 +163,15 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
   - `ReXSlot53 WRITER init_list`: observa as chamadas indiretas da lista de inicialização quando o contador é 54; não confundir esta observação com prova de escrita na tabela.
 - Verificação estática do artefato #99: a rotina `sub_8262C828` grava o destino em `r4), os outros campos em r5-r7, atualiza o contador em `0x83482808` e grava o estado zero. O registro 53 começa em `0x83480CF4`; a instrumentação de leitura do dispatcher compara esse endereço.
 - O endereço `0x82738920` continua identificado como LR/endereço interno no ramo de `sub_827388A8` antes de chamar `sub_8234D1F0`, não como início de função. Não adicionar stub/registro artificial para esse endereço.
-- Importante: o artefato #99 contém código e APK, mas ainda não contém log de execução do aparelho. Portanto, os novos valores `BEFORE/AFTER` e a origem final do ponteiro ainda precisam ser coletados em runtime.
-- Próximo passo: o usuário deve instalar/testar o APK #99, selecionar a pasta do jogo e iniciar uma vez. Depois, recolher o logcat completo (não filtrar apenas tags, para preservar o crash):
-  `adb logcat -d -v threadtime > /sdcard/Download/pacman-workflow99-full.txt`
-  Enviar esse arquivo para análise. Procurar as tags `ReXSlot53`, `ReXCallback53`, `ReXInitList`, `ReXCallbackReg` e `ReXDispatch`.
-- Se o Android rejeitar a instalação por conflito de assinatura com APK de teste anterior, desinstalar a versão anterior do Pac-Man e instalar o APK #99; os arquivos do jogo na pasta Download não devem ser apagados.
+- O usuário testou o APK #99 duas vezes e forneceu `pacman-workflow99-full.txt`; as duas execuções reproduziram o mesmo crash no dispatcher. O arquivo é um logcat completo do aparelho, não um APK.
+- No log, `ReXApp` conclui `SetupEnvironment`, `SetupPresentation` e `ConstructRuntime`; o fechamento ocorre depois de `LaunchModule queued`, no despacho de `0x82738920`. Portanto, para este teste, não há evidência de falha no SAF, SDL, carregamento das bibliotecas ou reserva de memória.
+- O log de leitura mostra `count=63`, slot `0x83480CF4`, target `0x82738920`, `arg0=0x833AB458`, `arg5=0x82738AA0`, `state=0`. O contador 63 é o total atual de registros; o slot continua sendo o índice 53 (base `0x834808D0`, stride 20).
+- Os marcadores antigos `ReXSlot53 BEFORE/AFTER` não aparecem. O marcador `WRITER init_list` observa a lista de inicialização `0x833A0F44`, não a tabela de callbacks `0x834808C8`; não usar essas linhas como prova de quem escreveu o callback.
+- O artefato diagnóstico #99 foi baixado e inspecionado. `sub_8262C828` calcula o destino de cada registro como `base + 8 + count*20`; grava target de `r4`, demais parâmetros de `r5-r7`, incrementa o contador em `0x83482808` e grava o estado zero. A instrumentação antiga dependia do contador estar exatamente em 53/54 e, por isso, não identificou o escritor.
+- `0x82738920` é o endereço de retorno definido imediatamente antes da chamada a `sub_8234D1F0` no ramo de erro de `sub_827388A8`. O ponto de entrada real dessa função é `0x827388A8`, que consta na tabela `SetFunction`; `0x82738920` não consta como início de função. Não criar stub nem registrar esse endereço artificialmente.
+- A rotina de registro `sub_8262C828` tem apenas um call-site direto visível no código gerado (`sub_83386380`), mas pode também ser invocada por despacho indireto. É necessário capturar todas as entradas da rotina, inclusive LR do chamador e r4-r7, para identificar a chamada que fornece o target inválido.
+- Commit `4f1b332844603317e6dd8bbc74efdbcc21ce4e67`: workflow atualizado para substituir o teste por contador por instrumentação baseada no endereço real calculado do slot. A nova tag `ReXCbWrite` registra cada entrada em `sub_8262C828` (contador, LR do chamador e r4-r7) e, quando o destino calculado é exatamente `0x83480CF4` ou o target é `0x82738920`, registra os valores antes/depois da gravação. Este commit apenas altera o workflow; ainda não é um APK testado.
+- Próximo passo: verificar se o workflow novo compila e se o artefato diagnóstico inclui o shard instrumentado. Só solicitar novo teste no telefone depois de um APK novo ser gerado com sucesso. No próximo log, procurar `ReXCbWrite`, `ReXCallback53` e `ReXDispatch`.
 - Não considerar o jogo corrigido até o teste real. Não alterar a lógica do jogo nem registrar artificialmente `0x82738920`.
 
 
@@ -214,3 +218,12 @@ Fonte: APK fornecido pelo usuário `Black.apk.zip` e repositório público https
 4. Em etapa posterior, estudar pacing de FPS, resolução dinâmica e controles touchscreen do Black, adaptando-os à arquitetura ReXGlue/ReXRuntime e ao renderer do Pac-Man.
 
 Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man e nenhuma alteração funcional foi feita por causa desta análise.
+
+
+## Continuação — instrumentação do escritor do callback (2026-11-04)
+
+- O diagnóstico do APK #99 foi incorporado acima. Não pedir novo teste do #99: o usuário já o executou duas vezes e enviou o log completo.
+- O workflow foi alterado no commit `4f1b332844603317e6dd8bbc74efdbcc21ce4e67` para instrumentar o registro `sub_8262C828` sem pressupor o valor do contador. A tag `ReXCbWrite` emite uma linha `ENTER` por chamada e linhas `BEFORE/AFTER` quando o endereço calculado da gravação é o slot 53 ou quando `r4` contém `0x82738920`.
+- O log `ENTER` é emitido no prólogo, antes de `ctx.lr` ser substituído pelo LR interno da própria função, preservando o LR do chamador.
+- Ainda não há confirmação de build para este commit. Verificar o resultado do GitHub Actions antes de solicitar qualquer teste no Motorola.
+- Se não houver `BEFORE/AFTER` para o slot 53, mas o dispatcher continuar lendo o target inválido, a gravação está ocorrendo fora de `sub_8262C828`; a próxima etapa será instrumentar os caminhos genéricos de escrita de memória do ReXRuntime com filtro restrito ao intervalo do registro 53, sem registrar todos os acessos à memória.
