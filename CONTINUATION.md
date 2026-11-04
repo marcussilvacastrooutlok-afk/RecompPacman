@@ -169,3 +169,48 @@ Essas mudanças são instrumentação de diagnóstico, não correção do jogo. 
   Enviar esse arquivo para análise. Procurar as tags `ReXSlot53`, `ReXCallback53`, `ReXInitList`, `ReXCallbackReg` e `ReXDispatch`.
 - Se o Android rejeitar a instalação por conflito de assinatura com APK de teste anterior, desinstalar a versão anterior do Pac-Man e instalar o APK #99; os arquivos do jogo na pasta Download não devem ser apagados.
 - Não considerar o jogo corrigido até o teste real. Não alterar a lógica do jogo nem registrar artificialmente `0x82738920`.
+
+
+## Referência externa analisada — Black Android (2026-11-04)
+
+Fonte: APK fornecido pelo usuário `Black.apk.zip` e repositório público https://github.com/RanggaCasper/Black-Android (branch main). Análise estática; o APK não foi executado neste ambiente.
+
+### Diferenças fundamentais
+- Black Android recompila o Black do Xbox original: XBE/x86. Pac-Man continua sendo Xbox 360: XEX/PowerPC. Não copiar código de kernel, ABI, tradução de CPU, chamadas de sistema ou renderer específico do Black para o Pac-Man.
+- O README do Black confirma recompilação estática antecipada via XboxXBE-Recomp para C++, compilada para ARM64; declara explicitamente que não é emulador.
+- O repositório Black usa XboxXBE-Recomp com SDK fixado no commit `99078b119b5d5e0d1d6afb1390e29437c0c984c0`.
+- No CMake do Black, o runtime portátil do SDK, o código recompilado do jogo, as fontes específicas do jogo e o host Android são ligados em uma única `libmain.so`. O APK analisado tem `libSDL3.so`, `libc++_shared.so` e `libmain.so`; o `DT_NEEDED` de `libmain.so` lista SDL3, Vulkan, Android, log, libc++ e bibliotecas de sistema. Não existe `librexruntime.so` separado no APK Black. Isso não significa que Pac-Man deva remover sua biblioteca ReXRuntime: a arquitetura e o SDK são diferentes.
+- O Black usa SDL3 3.4.16 (tag `release-3.4.16`) tanto no CMake quanto no Java SDLActivity. A lição aplicável é manter o lado Java e o nativo SDL rigorosamente sincronizados; isso é especialmente relevante diante dos antigos erros de incompatibilidade JNI/versão SDL no Pac-Man.
+
+### Padrões Android reutilizáveis como referência
+- `BlackActivity` estende `SDLActivity`; `getLibraries()` retorna `SDL3` e `main`, definindo a ordem de carregamento. Isso é uma referência para revisar o carregamento de bibliotecas e JNI do launcher Pac-Man, não uma implementação para copiar cegamente.
+- O host nativo envia stderr para Logcat por pipe e também inicializa logs persistentes em uma pasta acessível do app. Pac-Man já tem tags Android próprias; comparar e reforçar a persistência/flush dos logs pode ser útil, mas não substitui as tags de diagnóstico já instrumentadas.
+- O Black trata ciclo de vida Android com eventos SDL de foreground/background, estado atômico e espera do renderer até voltar ao primeiro plano.
+- O Black implementa pacing de FPS por relógio monotônico e resolução dinâmica ajustada pela taxa de quadros. Ideias para uma etapa posterior, depois de o jogo iniciar de forma estável; não são prioridade para resolver o callback 53.
+- O Black tem controles touchscreen próprios integrados ao SDL e um caminho adicional para gamepads Android que não são reconhecidos como joysticks SDL. Pode servir como referência futura para controles, não para a causa atual do crash.
+
+### Descoberta sobre armazenamento e seleção de jogos
+- Correção importante em relação à impressão inicial: o Black não oferece como fluxo principal um seletor SAF de pasta de jogo. Ele procura `default.xbe`/ISO em `/storage/emulated/0/Black`, nas pastas `Black` dos volumes removíveis e em `Android/data/com.racas.black/files/assets`.
+- O Black pede permissão especial `MANAGE_EXTERNAL_STORAGE` (Android 11+) para ler a pasta compartilhada; também oferece importação SAF de arquivo ISO com `ACTION_OPEN_DOCUMENT`.
+- O importador copia em thread de trabalho para arquivo temporário `.part`, verifica tamanho/espaço livre e assinatura do disco quando pode, faz sync e renomeia ao final para não expor cópia incompleta ao carregador.
+- Pac-Man já tem uma implementação diferente de seleção de pasta via SAF em `tools/android/install_game_setup.py`, copiando os arquivos selecionados para armazenamento privado do app antes de iniciar SDL. Portanto, não substituir esse fluxo pelo modelo de acesso amplo do Black sem necessidade. As ideias aproveitáveis são cópia atômica, validação do arquivo de entrada, progresso, tratamento de cancelamento e logs de erro.
+
+### Carregamento e validação do jogo no Black
+- `native/game_files.cpp` procura o XBE em diretórios conhecidos e também abre ISOs; calcula SHA-1 do XBE e compara com o XBE exato usado para gerar o código nativo.
+- Uma versão europeia conhecida é convertida por patch antes da comparação; outras versões são identificadas e só iniciam após confirmação do usuário.
+- O Black verifica limites/tamanho dos arquivos dentro da ISO e registra erros de imagem truncada.
+- O carregador aguarda arquivos aparecerem sem bloquear completamente os eventos SDL.
+- Conceito aproveitável no Pac-Man: validar que o XEX selecionado corresponde ao binário que gerou a recompilação (hash/identidade) e registrar claramente caminho, tamanho, versão/hash e erro de leitura. Não importar o código XBE/Xbox original.
+
+### Build e dependências do Black
+- O build oficial do Black usa Windows 2025/Visual Studio para executar o recompiler x86 host, Android NDK 28.2.13676358, CMake 3.31.6, Java 17, SDL3 3.4.16 e Vulkan.
+- O workflow oficial é disparado por tags `v*`, não a cada push em main. Não copiar seu pipeline de build para Pac-Man, que já possui workflow Linux/Android próprio.
+- O APK examinado é ARM64; suas bibliotecas nativas foram identificadas como ELF AArch64. `libmain.so` depende dinamicamente de `libSDL3.so`, `libvulkan.so`, `libandroid.so`, `liblog.so`, `libc++_shared.so` e bibliotecas de sistema.
+
+### Aplicação prática no Pac-Man — plano, ainda não implementado
+1. Prioridade permanece obter o log real do APK #99 e determinar quem fornece/sobrescreve o target do slot 53. O Black não fornece evidência para corrigir `0x82738920`.
+2. Revisar a ordem de carregamento SDL Java/nativo e a lista de bibliotecas no launcher Pac-Man, garantindo uma única versão SDL coerente. Não alterar sem conferir o workflow e os arquivos reais do Pac-Man.
+3. Depois de estabilizar a execução, considerar reforço do log persistente, validação de identidade/hash do XEX e melhorias da cópia SAF (temporário + rename), mantendo a seleção de pasta já existente.
+4. Em etapa posterior, estudar pacing de FPS, resolução dinâmica e controles touchscreen do Black, adaptando-os à arquitetura ReXGlue/ReXRuntime e ao renderer do Pac-Man.
+
+Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man e nenhuma alteração funcional foi feita por causa desta análise.
