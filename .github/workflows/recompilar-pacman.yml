@@ -302,6 +302,16 @@ jobs:
               "    x, 8, y, (*(volatile u64*)(base + _rex_watch_addr + " + bs,
               "    REX_PHYS_HOST_OFFSET(_rex_watch_addr)) = " + bs,
               "    __builtin_bswap64((u64)_rex_watch_value)))",
+          ]
+
+          start = source.index(start_marker)
+          end = source.index(end_marker, start)
+          source = source[:start] + chr(10).join(watch_lines) + chr(10) + chr(10) + source[end:]
+          mmio_start = "#define REX_MM_STORE_U8(addr, val)"
+          mmio_end = "#define REX_MM_LOAD_U8(addr)"
+          if source.count(mmio_start) != 1 or source.count(mmio_end) != 1:
+              raise SystemExit("Bloco original de macros MMIO inesperado")
+          mmio_lines = [
               "#define REX_MM_STORE_U8(addr, val) " + bs,
               "  do { " + bs,
               "    u32 _mmio_addr = (addr); " + bs,
@@ -346,10 +356,9 @@ jobs:
               "    } " + bs,
               "  } while (0)",
           ]
-
-          start = source.index(start_marker)
-          end = source.index(end_marker, start)
-          source = source[:start] + chr(10).join(watch_lines) + chr(10) + chr(10) + source[end:]
+          mmio_begin = source.index(mmio_start)
+          mmio_finish = source.index(mmio_end, mmio_begin)
+          source = source[:mmio_begin] + chr(10).join(mmio_lines) + chr(10) + chr(10) + source[mmio_finish:]
           if "ReXMemWatch" not in source:
               raise SystemExit("Watchpoint não foi inserido")
           header.write_text(source)
