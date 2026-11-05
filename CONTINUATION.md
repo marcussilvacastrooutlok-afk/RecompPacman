@@ -258,3 +258,14 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - O shard `pacman_colors_recomp.78.cpp` confirma que `sub_82DA24F0` chama callbacks de uma lista distinta; a instrumentação nessa função não identifica o escritor do registro 53.
 - Próxima investigação: localizar os caminhos de escrita de memória usados pelo código recompilado/runtime e instrumentar somente escritas cujo endereço de destino seja `0x83480CF4` (e, se necessário, os campos vizinhos do registro). Registrar PC/LR do PPC, valor escrito, thread e endereço efetivo. Antes de alterar, localizar a implementação real de `REX_STORE_U32`/store no SDK para evitar instrumentar macros erradas ou gerar logs massivos.
 - Estado: causa funcional ainda não corrigida. O APK #103 é diagnóstico e não deve ser apresentado como versão funcional. Não solicitar novo teste do #103; o log já foi enviado e analisado.
+
+## Investigação do caminho real de gravação PPC — 2026-11-04
+
+- A análise do SDK confirmou que `REX_STORE_U8/U16/U32/U64` são macros definidos no template `resources/templates/codegen/pch_h.inja`, linhas 142–145, e não em `src/core/memory.cpp`.
+- Os macros escrevem diretamente em `base + (u32)(x) + REX_PHYS_HOST_OFFSET(x)`; U16/U32/U64 fazem byte-swap antes da gravação.
+- O gerador PPC em `src/codegen/builders/memory.cpp` emite essas macros para instruções `stw`, `stwu`, `stwux`, `stwx` e operações de armazenamento correlatas.
+- O template inclui `<rex/ppc.h>`, logging e headers padrão; o código gerado utiliza `PPCContext& ctx`, que contém `ctx.lr`. Isso permite registrar LR junto ao endereço e valor no ponto da gravação.
+- O fluxo atual executa codegen no passo 151–163 do workflow e depois instrumenta funções geradas. A instrumentação anterior em `sub_8262C828` não encontrou a escrita do callback 53; não deve ser considerada prova de que essa função é a única via de gravação.
+- Próximo passo: localizar com precisão o header PCH gerado pelo codegen e adicionar um watchpoint de software estreito nos macros de store, observando qualquer operação de 1/2/4/8 bytes que sobreponha o intervalo `0x83480CF4–0x83480CF7`. Registrar endereço efetivo, largura, valor, `ctx.lr` e valor antes/depois. Incluir também variantes MMIO apenas se o caminho puder atingir esse intervalo; ele não é um endereço MMIO.
+- Não alterar a lógica do jogo, não registrar stub em `0x82738920` e não solicitar novo teste até existir APK de diagnóstico compilado com essa observação.
+- Nenhum código de produção ou workflow foi alterado nesta etapa; foi feita apenas análise do caminho de geração/armazenamento.
