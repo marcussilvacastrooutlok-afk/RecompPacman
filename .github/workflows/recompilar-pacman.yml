@@ -693,6 +693,12 @@ jobs:
           echo "Commit: $GITHUB_SHA" >> diagnosticos/resumo.txt
           GENERATED="pacman_project/generated/default"
           if [ -d "$GENERATED" ]; then
+            PCH="$GENERATED/pacman_colors_pch.h"
+            if [ -f "$PCH" ]; then
+              cp "$PCH" diagnosticos/pacman_colors_pch.h
+              grep -n -E 'REX_WATCHED_STORE|ReXMemWatch|REX_MM_STORE_U32' "$PCH" \
+                > diagnosticos/watchpoint-pch.txt || true
+            fi
             echo "=== Busca global do trap ===" >> diagnosticos/resumo.txt
             grep -R -n -E 'sub_8262C898|82738920|8262C898' "$GENERATED" \
               --include='*.cpp' --include='*.h' \
