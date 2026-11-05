@@ -239,3 +239,22 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Não houve alteração da lógica do jogo nem registro artificial de `0x82738920`; esta versão é diagnóstica.
 - Próxima etapa: o usuário instalará e executará o APK #103 com a pasta do jogo já selecionada e enviará um logcat completo após o fechamento. O dado principal será a sequência `ReXCbWrite ENTER`, `BEFORE`, `AFTER`, comparada com `ReXCallback53` e `ReXDispatch`. Se aparecer `BEFORE/AFTER slot=0x83480CF4`, teremos o chamador e os parâmetros exatos que gravaram o target. Se o dispatcher ainda encontrar `0x82738920` sem qualquer gravação correspondente por `sub_8262C828`, a investigação deverá migrar para outros caminhos de escrita de memória.
 - O APK #99 não precisa ser testado novamente. O APK de diagnóstico atual é o #103.
+
+## Resultado do log completo do APK #103 — 2026-11-04
+
+- O usuário enviou `pacman-workflow103-full.txt`, com 3.620 linhas. O arquivo registra duas execuções do APK #103 (PIDs 8301 e 11209); ambas reproduzem o mesmo fechamento ao iniciar o jogo.
+- Nas duas execuções, o runtime inicia e chega ao dispatcher. Antes do crash, `ReXCallback53` lê:
+  - contador global: 63;
+  - endereço do registro: `0x83480CF4` (índice 53, base do primeiro registro `0x834808D0`, stride 20);
+  - target: `0x82738920`;
+  - arg0: `0x833AB458`;
+  - arg5: `0x82738AA0`;
+  - state: 0; field12/field16: 0.
+- `ReXDispatch` confirma target/CTR/R11 `0x82738920`, slot em R31 `0x83480CF4` e callsite `0x8262C908`. O tombstone confirma `InvalidFunctionTrap` chamado por `sub_8262C898+360`; não é falha de SDL/SAF nem de reserva de memória.
+- A nova instrumentação aparece no binário e no log: `ReXCbWrite ENTER` é emitida para várias chamadas a `sub_8262C828`. Porém, não existe nenhuma linha `ReXCbWrite BEFORE` nem `AFTER` nas duas execuções, e nenhum ENTER mostra `r4_target=0x82738920`.
+- Isso é evidência de que o target inválido não foi gravado por uma das execuções instrumentadas de `sub_8262C828` que aparecem no log. Ainda não prova qual caminho alternativo gravou o slot; pode ser outra rotina de escrita, inicialização/cópia de memória ou caminho de registro diferente.
+- As linhas `ReXSlot53 WRITER init_list_slot=...` observam a lista separada percorrida por `sub_82DA24F0`; os endereços ficam em `0x833A04D8..0x833A052C`, não no registro de callbacks `0x83480CF4`. Não interpretar essas linhas como escrita no callback 53.
+- A inspeção do shard `pacman_colors_recomp.167.cpp` confirma que `sub_827388A8` começa em `0x827388A8`; no ramo de falha de alocação, o código define LR `0x82738920` imediatamente antes de chamar `sub_8234D1F0`. A tabela de funções registra `0x827388A8` e `0x82738AA0`, mas não `0x82738920`. Portanto, o target continua sendo um endereço interno de retorno, não uma entrada registrada. Não adicionar stub nem mapear esse endereço como função.
+- O shard `pacman_colors_recomp.78.cpp` confirma que `sub_82DA24F0` chama callbacks de uma lista distinta; a instrumentação nessa função não identifica o escritor do registro 53.
+- Próxima investigação: localizar os caminhos de escrita de memória usados pelo código recompilado/runtime e instrumentar somente escritas cujo endereço de destino seja `0x83480CF4` (e, se necessário, os campos vizinhos do registro). Registrar PC/LR do PPC, valor escrito, thread e endereço efetivo. Antes de alterar, localizar a implementação real de `REX_STORE_U32`/store no SDK para evitar instrumentar macros erradas ou gerar logs massivos.
+- Estado: causa funcional ainda não corrigida. O APK #103 é diagnóstico e não deve ser apresentado como versão funcional. Não solicitar novo teste do #103; o log já foi enviado e analisado.
