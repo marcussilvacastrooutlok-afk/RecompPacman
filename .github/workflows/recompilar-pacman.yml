@@ -243,6 +243,73 @@ jobs:
               raise SystemExit(f"Esperava exatamente uma definição de sub_8262C828; encontrei {matches}")
           print("Instrumentação por endereço real de destino instalada em:", matches[0])
           PY
+      - name: Monitorar gravações PPC sobre o callback 53
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          header = Path("pacman_project/generated/default/pacman_colors_pch.h")
+          if not header.is_file():
+              raise SystemExit(f"PCH gerado não encontrado: {header}")
+
+          source = header.read_text()
+          include = "#include <android/log.h>"
+          if include not in source:
+              source = source.replace("#include <rex/ppc.h>", "#include <rex/ppc.h>\\n" + include, 1)
+
+          marker = "#define REX_STORE_U8(x, y)"
+          if source.count(marker) != 1:
+              raise SystemExit("Definição REX_STORE_U8 inesperada no PCH")
+
+          watch = """#define REX_WATCHED_STORE(addr, width, value, store_statement)                  \\\\
+            do {                                                                       \\\\
+              const u32 _rex_watch_addr = (u32)(addr);                                 \\\\
+              const uint64_t _rex_watch_value = (uint64_t)(value);                     \\\\
+              const bool _rex_watch_hit =                                              \\\\
+                  ((uint64_t)_rex_watch_addr < 0x83480CF8ull) &&                        \\\\
+                  (((uint64_t)_rex_watch_addr + (width)) > 0x83480CF4ull);              \\\\
+              if (_rex_watch_hit) {                                                    \\\\
+                __android_log_print(ANDROID_LOG_ERROR, "ReXMemWatch",                   \\\\
+                    "BEFORE addr=0x%08X width=%u value=0x%016llX lr=0x%08X slot53=0x%08X", \\\\
+                    _rex_watch_addr, (unsigned)(width),                                \\\\
+                    (unsigned long long)_rex_watch_value, (uint32_t)ctx.lr,             \\\\
+                    REX_LOAD_U32(0x83480CF4));                                         \\\\
+              }                                                                        \\\\
+              store_statement;                                                        \\\\
+              if (_rex_watch_hit) {                                                    \\\\
+                __android_log_print(ANDROID_LOG_ERROR, "ReXMemWatch",                   \\\\
+                    "AFTER addr=0x%08X width=%u value=0x%016llX lr=0x%08X slot53=0x%08X", \\\\
+                    _rex_watch_addr, (unsigned)(width),                                \\\\
+                    (unsigned long long)_rex_watch_value, (uint32_t)ctx.lr,             \\\\
+                    REX_LOAD_U32(0x83480CF4));                                         \\\\
+              }                                                                        \\\\
+            } while (0)
+
+          #define REX_STORE_U8(x, y) REX_WATCHED_STORE(                               \\\\
+              x, 1, y, (*(volatile u8*)(base + _rex_watch_addr +                       \\\\
+              REX_PHYS_HOST_OFFSET(_rex_watch_addr)) = (u8)_rex_watch_value))
+          #define REX_STORE_U16(x, y) REX_WATCHED_STORE(                              \\\\
+              x, 2, y, (*(volatile u16*)(base + _rex_watch_addr +                      \\\\
+              REX_PHYS_HOST_OFFSET(_rex_watch_addr)) =                                 \\\\
+              __builtin_bswap16((u16)_rex_watch_value)))
+          #define REX_STORE_U32(x, y) REX_WATCHED_STORE(                              \\\\
+              x, 4, y, (*(volatile u32*)(base + _rex_watch_addr +                      \\\\
+              REX_PHYS_HOST_OFFSET(_rex_watch_addr)) =                                 \\\\
+              __builtin_bswap32((u32)_rex_watch_value)))
+          #define REX_STORE_U64(x, y) REX_WATCHED_STORE(                              \\\\
+              x, 8, y, (*(volatile u64*)(base + _rex_watch_addr +                      \\\\
+              REX_PHYS_HOST_OFFSET(_rex_watch_addr)) =                                 \\\\
+              __builtin_bswap64((u64)_rex_watch_value)))"""
+
+          start = source.index(marker)
+          end_marker = "#define REX_MEMORY_SIZE"
+          end = source.index(end_marker, start)
+          source = source[:start] + watch + "\\n\\n" + source[end:]
+          if "ReXMemWatch" not in source:
+              raise SystemExit("Watchpoint não foi inserido")
+          header.write_text(source)
+          print(f"Watchpoint seletivo instalado em {header}")
+          PY
       - name: Instrumentar leitura do callback 53
         run: |
           python3 - <<'PY'
