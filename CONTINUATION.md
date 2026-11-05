@@ -269,3 +269,14 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Próximo passo: localizar com precisão o header PCH gerado pelo codegen e adicionar um watchpoint de software estreito nos macros de store, observando qualquer operação de 1/2/4/8 bytes que sobreponha o intervalo `0x83480CF4–0x83480CF7`. Registrar endereço efetivo, largura, valor, `ctx.lr` e valor antes/depois. Incluir também variantes MMIO apenas se o caminho puder atingir esse intervalo; ele não é um endereço MMIO.
 - Não alterar a lógica do jogo, não registrar stub em `0x82738920` e não solicitar novo teste até existir APK de diagnóstico compilado com essa observação.
 - Nenhum código de produção ou workflow foi alterado nesta etapa; foi feita apenas análise do caminho de geração/armazenamento.
+
+## Watchpoint seletivo no caminho de armazenamento PPC — 2026-11-04
+
+- Commit do workflow: `93606513c57a8f8957253a20eaa6cd4c2bf76cc0` (com commits intermediários de ajuste do script).
+- O workflow agora modifica o PCH gerado `pacman_project/generated/default/pacman_colors_pch.h`, nome e caminho confirmados por `resources/templates/init/rexglue_cmake.inja` (a função `rexglue_apply_recomp_settings` aplica o header `pacman_colors_pch.h` ao alvo recompilado).
+- A instrumentação troca temporariamente as macros PPC `REX_STORE_U8/U16/U32/U64` por wrappers que preservam endianess e escrita original, mas só registram operações que se sobrepõem ao intervalo do callback 53 `0x83480CF4–0x83480CF7`.
+- Os logs `ReXMemWatch BEFORE/AFTER` registram endereço, largura, valor, `ctx.lr` e o valor atual do slot 53. As macros `REX_MM_STORE_U8/U16/U32/U64` são preservadas: MMIO continua usando `CheckStore`; o caminho não-MMIO delega aos novos wrappers para também ser observado.
+- O pacote de diagnóstico agora inclui `pacman_colors_pch.h` e `watchpoint-pch.txt`, para confirmar o conteúdo efetivamente compilado.
+- Lint do commit anterior `c4adad12ef46e329d3662413dda802ef34fd94e5` terminou com sucesso. Build #110, run ID `41951049942`, para o commit `93606513...`, foi iniciado e está em andamento no momento deste registro.
+- Nenhum teste no telefone foi solicitado ainda. Aguardar o build mais recente; só entregar APK após confirmar compilação e artefatos.
+- A observação cobre os stores PPC gerados por essas macros. Se o log não mostrar gravações, será necessário investigar caminhos alternativos de cópia/memset ou stores diretos, sem concluir prematuramente que o slot não foi escrito.
