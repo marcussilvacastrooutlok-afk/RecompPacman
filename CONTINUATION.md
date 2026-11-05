@@ -227,3 +227,15 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - O log `ENTER` é emitido no prólogo, antes de `ctx.lr` ser substituído pelo LR interno da própria função, preservando o LR do chamador.
 - Ainda não há confirmação de build para este commit. Verificar o resultado do GitHub Actions antes de solicitar qualquer teste no Motorola.
 - Se não houver `BEFORE/AFTER` para o slot 53, mas o dispatcher continuar lendo o target inválido, a gravação está ocorrendo fora de `sub_8262C828`; a próxima etapa será instrumentar os caminhos genéricos de escrita de memória do ReXRuntime com filtro restrito ao intervalo do registro 53, sem registrar todos os acessos à memória.
+
+
+## Resultado da instrumentação de callbacks — APK #103 (2026-11-04)
+
+- Workflow Android #102 (run ID 41907978251) e #103 (run ID 41908033888) concluídos com sucesso; os lint checks correspondentes também passaram.
+- APK #103 baixado do artefato `pacman-android-apk` (artifact ID 13364390864), extraído e verificado localmente: `lib/arm64-v8a/libmain.so`, `libSDL3.so` e `librexruntime.so` presentes.
+- SHA-256 do APK #103: `443bcf9b3007df4aa6d22a3c83704af5f5f213a404f64db88248917f11ce2f97`.
+- A inspeção de strings em `libmain.so` confirmou que os marcadores `ReXCbWrite`, `ENTER count`, `BEFORE slot` e `AFTER slot` estão compilados no binário.
+- O artefato diagnóstico #103 (artifact ID 13364076200) foi extraído. Em `pacman_colors_recomp.167.cpp`, a instrumentação está na definição de `sub_8262C828`, captura o LR de entrada e os registradores r4-r7 e calcula o destino real da gravação. O endereço esperado para o slot 53, com índice 53, é `0x83480CF4`.
+- Não houve alteração da lógica do jogo nem registro artificial de `0x82738920`; esta versão é diagnóstica.
+- Próxima etapa: o usuário instalará e executará o APK #103 com a pasta do jogo já selecionada e enviará um logcat completo após o fechamento. O dado principal será a sequência `ReXCbWrite ENTER`, `BEFORE`, `AFTER`, comparada com `ReXCallback53` e `ReXDispatch`. Se aparecer `BEFORE/AFTER slot=0x83480CF4`, teremos o chamador e os parâmetros exatos que gravaram o target. Se o dispatcher ainda encontrar `0x82738920` sem qualquer gravação correspondente por `sub_8262C828`, a investigação deverá migrar para outros caminhos de escrita de memória.
+- O APK #99 não precisa ser testado novamente. O APK de diagnóstico atual é o #103.
