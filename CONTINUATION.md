@@ -329,3 +329,16 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Novo passo preparado no workflow: registrar na entrada de `sub_8262C740` o contador, LR original salvo em `r12` e argumentos `r3-r6`, com filtro para contadores a partir de 50 ou target igual a `0x82738920`. Isso deve revelar o chamador real e o valor entregue em `r3` quando o índice 53 é preenchido.
 - Commit da instrumentação de entrada: `7564d0b2ab8ff7f9dcc37f84b1ae07dd7034bf96`. Aguardando o próximo workflow para obter o log `ReXReg740`.
 - Não adicionar stub nem registrar `0x82738920` como função. Não solicitar teste do APK #111: ele só incluiu o shard ausente para análise e não corrige o jogo.
+
+
+## Análise do diagnóstico do Workflow #112 — caminho alternativo confirmado (2026-11-07)
+
+- Workflow Android #112, run ID `42325930796`, commit `7564d0b2ab8ff7f9dcc37f84b1ae07dd7034bf96`: `completed/success`. Todas as etapas passaram, inclusive a instrumentação da entrada de `sub_8262C740`, compilação ARM64, empacotamento SDL3 e publicação do APK.
+- Artefato de diagnóstico: `diagnostico-pacman`, ID `13557143001`; pacote baixado e extraído. Artefato APK: `pacman-android-apk`, ID `13557296125`.
+- O pacote finalmente contém `pacman_colors_recomp.276.cpp` e `callback53-writer-8262C740.txt`, que faltavam nos pacotes anteriores.
+- O código de `sub_8262C740` confirma o formato do registro de 20 bytes. Com base `0x834808C8) e contador `n`, grava `r5` no offset +0, `r6` em +4, `r3` em +8 (target), `r4` em +12 e zero em +16; depois incrementa o contador em `0x83482808`. Para índice 53, o target está em `0x834808C8 + 53*20 + 8 = 0x83480CF4`. Portanto, `sub_8262C740` é o caminho alternativo que escreve o callback 53, não apenas uma função próxima ao endereço observado.
+- A origem do target passa por `r3) na entrada de `sub_8262C740`. O pacote mostra 28 callsites estáticos para essa rotina nos shards coletados; ainda não se identificou qual deles fornece `0x82738920` no registro de índice 53.
+- **Correção importante da interpretação do LR:** o watchpoint anterior capturou `ctx.lr=0x8262C748` porque a própria função altera LR ao chamar `__savegprlr_29`. Esse valor é o retorno interno, não o chamador. Além disso, a instrumentação #112 imprimiu `ctx.r12` antes da instrução original `mflr r12`, portanto o campo chamado `caller_lr` no log #112 não é confiável como endereço do chamador.
+- Para corrigir isso, o workflow foi atualizado no commit `27574144e0768e822b0993de436fa609b4ec154a`: a instrumentação de entrada agora imprime `ctx.lr`, que contém o LR real do chamador no momento de entrada, antes que o prólogo PPC o copie para `r12` e a chamada auxiliar altere LR. A captura continua registrando contador e `r3-r6), com filtro para contador >= 50 ou target igual a `0x82738920`.
+- Próximo passo: analisar o Workflow #113 e seu log `ReXReg740`; correlacionar o registro de contador 53 com `caller_lr` correto e `target_r3`. Identificar o callsite e o fluxo que fornecem o endereço interno `0x82738920`; então corrigir a origem/semântica do registro, não criar stub.
+- O APK #112 é diagnóstico, não uma correção funcional. Não solicitar instalação/teste dele: o próximo APK #113 deve conter o LR corrigido para capturar o chamador de forma válida.
