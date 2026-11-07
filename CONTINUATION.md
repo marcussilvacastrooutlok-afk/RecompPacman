@@ -477,3 +477,19 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Corrigido o passo para montar o diagnóstico com concatenação explícita de strings Python, usando `"\n"` e `"\t"` corretamente. A correção foi commitada em `6adb899069d36aa2453754712d35e8f42fe5cade` no arquivo `.github/workflows/recompilar-pacman.yml`.
 - Próximo passo: verificar o novo workflow disparado pelo commit `6adb899...`. Se a instrumentação passar, confirmar que os quatro pontos (`sub_83387708`, `sub_8256DE18`, `sub_824497D8`, `sub_8262C898`) receberam logs e só então permitir que o build prossiga até gerar o APK.
 - Não instalar APK #116 (não foi gerado) nem alterar a lógica de callback/runtime. Continuar sem registrar stub para `0x82738920`.
+
+
+## Atualização de 2026-11-07 — Build #117 e instrumentação confirmada
+
+- Build Android #117, run ID `42411843613`, commit `6adb899069d36aa2453754712d35e8f42fe5cade`: **concluído com sucesso**. Todas as etapas do job `128521458816` passaram, incluindo geração do código, instrumentação, compilação ARM64, empacotamento SDL3/JNI e publicação do APK.
+- A etapa **Instrumentar origem e contexto do dispatcher de callbacks** passou.
+- Artifact `diagnostico-pacman`: ID `13591901212`, ZIP de 21,6 MB. A inspeção confirmou os logs de entrada em todos os quatro pontos:
+  - `sub_83387708` / tag `ReXCbRegister`, shard `.100.cpp`;
+  - `sub_8256DE18` / tag `ReXCbDispatchCaller`, shard `.64.cpp`;
+  - `sub_824497D8` / tag `ReXCbObjectCaller`, shard `.82.cpp`;
+  - `sub_8262C898` / tag `ReXCbDispatchEntry`, shard `.35.cpp`.
+- O shard `.35.cpp` também contém a instrumentação `ReXCallback53` imediatamente antes do `REX_CALL_INDIRECT_FUNC`, registrando count, slot, target, arg0, state, LR, r1, r3 e CTR.
+- Isso valida a instrumentação no código-fonte gerado e compilado. Ainda não temos os valores reais desses logs em execução; o diagnóstico ZIP preserva os fontes instrumentados, não o logcat de uma execução no telefone.
+- Artifact APK: `pacman-android-apk`, ID `13591940971`, ZIP de 136,6 MB contendo `pacman-android-arm64-debug.apk` (137.471.288 bytes).
+- Próximo passo: solicitar um único teste do APK #117 no Motorola: instalar, abrir, selecionar a pasta do jogo já usada anteriormente e iniciar até ocorrer o comportamento (abrir ou fechar). Depois coletar apenas as tags `ReXCbRegister`, `ReXCbDispatchCaller`, `ReXCbObjectCaller`, `ReXCbDispatchEntry` e `ReXCallback53` via logcat para identificar a origem real do callback 53 e o contexto de execução.
+- Não alterar ainda ReXRuntime/codegen nem registrar stub para `0x82738920`; aguardar evidência runtime.
