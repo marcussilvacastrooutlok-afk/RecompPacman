@@ -498,18 +498,22 @@ jobs:
                   marker = f"DEFINE_REX_FUNC({function}) {{"
                   if marker not in source:
                       continue
-                  prologue = marker + "\\n\\tREX_FUNC_PROLOGUE();"
+                  prologue = marker + "\n\tREX_FUNC_PROLOGUE();"
                   if source.count(prologue) != 1:
                       raise SystemExit(f"Prólogo inesperado para {function} em {path}")
                   if "#include <android/log.h>" not in source:
                       lines = source.splitlines()
                       lines.insert(1, "#include <android/log.h>")
-                      source = "\\n".join(lines) + "\\n"
-                  diagnostic = prologue + f\''' 
-          \\t__android_log_print(ANDROID_LOG_ERROR, "{tag}",
-          \\t    "ENTER caller_lr=0x%08X r1=0x%08X r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X cb_count=%u",
-          \\t    (uint32_t)ctx.lr, ctx.r1.u32, ctx.r3.u32, ctx.r4.u32,
-          \\t    ctx.r5.u32, ctx.r6.u32, ctx.r7.u32, REX_LOAD_U32(0x83482808));\'''
+                      source = "\n".join(lines) + "\n"
+                  diagnostic = (
+                      prologue
+                      + "\n\t__android_log_print(ANDROID_LOG_ERROR, \""
+                      + tag
+                      + "\",\n"
+                      + "\t    \"ENTER caller_lr=0x%08X r1=0x%08X r3=0x%08X r4=0x%08X r5=0x%08X r6=0x%08X r7=0x%08X cb_count=%u\",\n"
+                      + "\t    (uint32_t)ctx.lr, ctx.r1.u32, ctx.r3.u32, ctx.r4.u32,\n"
+                      + "\t    ctx.r5.u32, ctx.r6.u32, ctx.r7.u32, REX_LOAD_U32(0x83482808));"
+                  )
                   source = source.replace(prologue, diagnostic, 1)
                   found[function] = str(path)
                   changed = True
