@@ -243,6 +243,42 @@ jobs:
               raise SystemExit(f"Esperava exatamente uma definição de sub_8262C828; encontrei {matches}")
           print("Instrumentação por endereço real de destino instalada em:", matches[0])
           PY
+      - name: Identificar origem do target na rotina sub_8262C740
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          root = Path("pacman_project/generated/default")
+          marker = "DEFINE_REX_FUNC(sub_8262C740) {"
+          matches = []
+          for path in root.glob("pacman_colors_recomp.*.cpp"):
+              source = path.read_text()
+              if marker not in source:
+                  continue
+              prologue = marker + "\n\tREX_FUNC_PROLOGUE();"
+              if source.count(prologue) != 1:
+                  raise SystemExit(f"Prólogo inesperado em {path}")
+              if "#include <android/log.h>" not in source:
+                  lines = source.splitlines()
+                  lines.insert(1, "#include <android/log.h>")
+                  source = "\n".join(lines) + "\n"
+              diagnostic = prologue + """
+          \tconst uint32_t pacman_cb_count_entry = REX_LOAD_U32(0x83482808);
+          \tif (pacman_cb_count_entry >= 50 || ctx.r3.u32 == 0x82738920) {
+          \t    __android_log_print(ANDROID_LOG_ERROR, "ReXReg740",
+          \t        "ENTRY count=%u caller_lr=0x%08X target_r3=0x%08X arg_r4=0x%08X arg_r5=0x%08X arg_r6=0x%08X",
+          \t        pacman_cb_count_entry, ctx.r12.u32,
+          \t        ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32);
+          \t}
+          """
+              source = source.replace(prologue, diagnostic, 1)
+              path.write_text(source)
+              matches.append(str(path))
+          if len(matches) != 1:
+              raise SystemExit(f"Esperava exatamente uma definição de sub_8262C740; encontrei {matches}")
+          print("Entrada da rotina sub_8262C740 instrumentada:", matches[0])
+          PY
+
       - name: Monitorar gravações PPC sobre o callback 53
         run: |
           python3 - <<'PY'
