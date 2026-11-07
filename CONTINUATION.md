@@ -502,3 +502,18 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Não marcar o problema como resolvido e não criar outra alteração especulativa no dispatcher/codegen.
 - Próxima ação: obter do aparelho o logcat da execução #117 filtrado pelas tags ReXCbRegister, ReXCbDispatchCaller, ReXCbObjectCaller, ReXCbDispatchEntry e ReXCallback53. Usar esses registros para identificar qual chamador aciona o dispatcher, o contexto PPC e os valores efetivos do slot 53.
 - Depois de analisar o log real, decidir a correção baseada em evidência. Não registrar stub para 0x82738920 nem remapear esse endereço para sub_827388A8.
+
+
+## Logcat real do APK #117 — callback 53 confirmado em execução (2026-11-07)
+
+- O usuário gerou `pacman-117-logcat-completo.txt`; o arquivo filtrado anterior ficou com 0 bytes porque as tags solicitadas inicialmente não correspondiam a todas as tags emitidas pelo build. A captura completa encontrou os registros.
+- O log real confirma a execução de `ReXCbRegister`, `ReXReg740`, `ReXMemWatch`, `ReXCbDispatchCaller`, `ReXCbDispatchEntry`, `ReXCallback53` e `ReXDispatch`.
+- Registro do callback: `ReXReg740: ENTRY count=53 caller_lr=0x83387778 target_r3=0x82738920 arg_r4=0x82738AA0 arg_r5=0 arg_r6=0x833AB458`.
+- Escrita confirmada: `ReXMemWatch AFTER addr=0x83480CF4 value=0x82738920 slot53=0x82738920`. Portanto, o endereço já é fornecido ao registrador e gravado no slot; não é uma corrupção posterior do slot demonstrada pelo log.
+- No despacho: `count=63 slot=0x83480CF4 target=0x82738920 arg0=0x833AB458 state=0 caller_lr=0x8262C90C dispatch_r1=0x7010FBA0 dispatch_r3=0x833AB458 dispatch_ctr=0x82738920`.
+- `ReXDispatch` confirma o trap no destino `0x82738920`, com callsite provável `0x8262C908`, CTR/R11 apontando para `0x82738920`, R31 contendo o endereço do slot e R3=`0x833AB458`.
+- Observação: o log de registro apresenta `arg_r4=0x82738AA0`, enquanto a leitura imediatamente antes do despacho apresenta `arg0=0x833AB458`. Não assumir que esses campos representam o mesmo argumento: o log indica que o dispatcher está usando `0x833AB458` como R3 nesse ponto. Revisar o layout efetivo do registro e o código gerado em `sub_8262C740`/`sub_8262C898` antes de interpretar a discrepância.
+- A tag `ReXCbWrite` aparece em vários registros com `caller_lr=0x82DA25A8`; porém o registro específico de callback 53 está instrumentado separadamente por `ReXReg740` e `ReXMemWatch`. O registro 53 foi explicitamente passado por `sub_83387708`, com LR de chamada `0x83387778`.
+- O log confirma a origem imediata do target inválido: `sub_83387708` fornece explicitamente `0x82738920` ao registrador. Isso não determina ainda se a intenção é uma continuação/handler de falha ou se há erro no registro/dispatch. A cadeia de código previamente analisada termina em `KeBugCheck(30)`; não criar stub nem remapear o endereço para `sub_827388A8`.
+- O primeiro grep do usuário encontrou também um crash antigo às 19:33:18 e uma execução instrumentada às 19:39:28. O conjunto de linhas 12776–12831 corresponde à execução instrumentada posterior; usar essa sequência como evidência principal.
+- Próxima etapa: correlacionar `sub_83387708` com o chamador e a fase em que é executada; revisar a assinatura/layout real do registro (incluindo qual campo é carregado em R3) e comparar a semântica do dispatcher com o contrato esperado desse tipo de callback. Nenhuma correção funcional foi aplicada; o APK #117 continua falhando.
