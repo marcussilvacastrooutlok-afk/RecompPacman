@@ -707,6 +707,10 @@ jobs:
             grep -R -n -C 12 -E "82DA25A8" "$GENERATED" \
               --include="*.cpp" --include="*.h" \
               > diagnosticos/caller-callback.txt || true
+            echo "=== Origem da gravação no callback 53 (sub_8262C740 / LR 0x8262C748) ===" >> diagnosticos/resumo.txt
+            grep -R -n -C 30 -E 'DEFINE_REX_FUNC\(sub_8262C740\)|8262C748' "$GENERATED" \
+              --include="*.cpp" --include="*.h" \
+              > diagnosticos/callback53-writer-8262C740.txt || true
             echo "=== Arquivos gerados e tamanhos ===" >> diagnosticos/resumo.txt
             find "$GENERATED" -maxdepth 1 -type f \
               \( -name '*.cpp' -o -name '*.h' \) \
@@ -717,7 +721,7 @@ jobs:
               [ -f "$SOURCE" ] || continue
               BASE="$(basename "$SOURCE")"
               cp "$SOURCE" "diagnosticos/$BASE"
-            done < <(grep -R -l -E 'sub_8262C898|82738920|8262C898|82DA25A8' "$GENERATED" \
+            done < <(grep -R -l -E 'sub_8262C898|sub_8262C740|82738920|8262C748|8262C898|82DA25A8' "$GENERATED" \
               --include='*.cpp' --include='*.h' || true)
             for SOURCE in "$GENERATED"/*init*.cpp "$GENERATED"/*register*.cpp \
                           "$GENERATED"/*init*.h "$GENERATED"/*register*.h; do
