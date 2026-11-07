@@ -294,3 +294,15 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Esta versão é um APK de diagnóstico: a compilação e a presença da instrumentação foram confirmadas, mas ainda não houve execução no aparelho e nenhuma correção funcional do jogo foi comprovada.
 - Próxima etapa: analisar o primeiro log do APK #110, procurando `ReXMemWatch BEFORE/AFTER` e correlacionar endereço, largura, valor e LR com `ReXCallback53`/ `ReXDispatch`. Se não houver watchpoint, investigar cópias/memsets ou stores diretos que não passam pelos macros instrumentados. Não adicionar stub para `0x82738920`.
 - APK #110 está pronto para o teste diagnóstico no Motorola; não é necessário repetir os testes dos APKs #99 ou #103.
+
+
+## Análise do log do APK #110 — primeiro escritor localizado (2026-11-06)
+
+- Arquivo recebido: `pacman-workflow110-full.txt`, 2.353 linhas; contém duas execuções do APK #110, PIDs 22768 e 22828.
+- Nas duas execuções, o watchpoint capturou exatamente uma gravação de 4 bytes em `0x83480CF4`, com `value=0x82738920` e `ctx.lr=0x8262C748`; imediatamente antes o slot era zero e imediatamente depois passou a `0x82738920`.
+- O evento ocorre antes da leitura fatal do callback 53. A leitura posterior confirma `count=63`, `slot=0x83480CF4`, `target=0x82738920`, `arg0=0x833AB458`, `arg5=0x82738AA0`, `state=0`; o dispatcher falha em `0x8262C908`.
+- Nenhuma chamada `ReXCbWrite` com `r4_target=0x82738920` aparece; portanto, o alvo não foi gravado pelo caminho instrumentado de `sub_8262C828`.
+- O endereço de LR `0x8262C748` pertence ao bloco da função convidada `sub_8262C740` (entrada `0x8262C740)); a função é declarada e registrada no mapa gerado. O tombstone confirma o crash no dispatcher `sub_8262C898`, não em SDL/JNI/memória de reserva.
+- O artefato diagnóstico #110 não incluiu o shard de código que contém `sub_8262C740`; a tabela DWARF do `libmain.so` aponta para `pacman_colors_recomp.276.cpp`. A inspeção do assembly nativo mostra que essa função contém várias gravações instrumentadas, mas ainda não permite atribuir o evento a uma instrução PPC específica sem o fonte desse shard e os registradores completos.
+- Alteração feita no workflow: commit `b069520265b93baba4866c32424be3135055a070`. O empacotamento de diagnósticos agora inclui shards que contenham `sub_8262C740`/`0x8262C748` e gera `callback53-writer-8262C740.txt` com contexto de código.
+- Próxima etapa: examinar o fonte de `sub_8262C740` no novo artefato, identificar a instrução PPC exata e correlacionar registradores de base/valor. Não alterar a tabela, não substituir `0x82738920` por stub e não registrar `0x82738920` como função até confirmar a semântica da instrução.
