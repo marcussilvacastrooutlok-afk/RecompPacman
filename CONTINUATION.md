@@ -467,3 +467,13 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Build #116, run ID `42391845264`: iniciado, job `128460869679` em andamento no primeiro acompanhamento.
 - Lint #130, run ID `42391845268`: iniciado, job `128460869663` em andamento no primeiro acompanhamento.
 - Não solicitar instalação do APK #116 antes de verificar se a instrumentação compilou. Se o build passar, este APK será necessário para um único teste direcionado: abrir o jogo e capturar logcat do crash, sem repetir testes anteriores desnecessariamente.
+
+## Atualização de 2026-11-07 — Workflow #116 e correção da instrumentação
+
+- O Workflow Android #116 (run ID `42391845264`, commit `62d658add04e7452df8752640230b4b8aafb0d6f`) terminou com falha no passo **Instrumentar origem e contexto do dispatcher de callbacks**.
+- A falha foi exclusivamente de sintaxe Python no script que injeta os logs: strings de quebra de linha estavam escapadas duas vezes e a construção de uma f-string com aspas triplas ficou inválida (`SyntaxError: unexpected character after line continuation character`).
+- As etapas anteriores, incluindo checkout, compilação/instalação do ReXGlue host, inicialização do projeto, geração do código do Pac-Man e instrumentações anteriores, foram concluídas. As etapas Android e publicação do APK foram ignoradas após a falha.
+- O artifact `diagnostico-pacman` foi publicado (ID `13581667554`), mas não há APK #116 para testar.
+- Corrigido o passo para montar o diagnóstico com concatenação explícita de strings Python, usando `"\n"` e `"\t"` corretamente. A correção foi commitada em `6adb899069d36aa2453754712d35e8f42fe5cade` no arquivo `.github/workflows/recompilar-pacman.yml`.
+- Próximo passo: verificar o novo workflow disparado pelo commit `6adb899...`. Se a instrumentação passar, confirmar que os quatro pontos (`sub_83387708`, `sub_8256DE18`, `sub_824497D8`, `sub_8262C898`) receberam logs e só então permitir que o build prossiga até gerar o APK.
+- Não instalar APK #116 (não foi gerado) nem alterar a lógica de callback/runtime. Continuar sem registrar stub para `0x82738920`.
