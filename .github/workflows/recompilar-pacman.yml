@@ -267,7 +267,7 @@ jobs:
           \tif (pacman_cb_count_entry >= 50 || ctx.r3.u32 == 0x82738920) {
           \t    __android_log_print(ANDROID_LOG_ERROR, "ReXReg740",
           \t        "ENTRY count=%u caller_lr=0x%08X target_r3=0x%08X arg_r4=0x%08X arg_r5=0x%08X arg_r6=0x%08X",
-          \t        pacman_cb_count_entry, ctx.r12.u32,
+          \t        pacman_cb_count_entry, (uint32_t)ctx.lr,
           \t        ctx.r3.u32, ctx.r4.u32, ctx.r5.u32, ctx.r6.u32);
           \t}
           """
