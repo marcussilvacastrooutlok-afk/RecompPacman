@@ -493,3 +493,12 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Artifact APK: `pacman-android-apk`, ID `13591940971`, ZIP de 136,6 MB contendo `pacman-android-arm64-debug.apk` (137.471.288 bytes).
 - Próximo passo: solicitar um único teste do APK #117 no Motorola: instalar, abrir, selecionar a pasta do jogo já usada anteriormente e iniciar até ocorrer o comportamento (abrir ou fechar). Depois coletar apenas as tags `ReXCbRegister`, `ReXCbDispatchCaller`, `ReXCbObjectCaller`, `ReXCbDispatchEntry` e `ReXCallback53` via logcat para identificar a origem real do callback 53 e o contexto de execução.
 - Não alterar ainda ReXRuntime/codegen nem registrar stub para `0x82738920`; aguardar evidência runtime.
+
+
+## Teste real do APK #117 — falha reproduzida (2026-11-07)
+
+- O usuário instalou/testou o APK #117 e confirmou que o comportamento continua igual: ao tocar em **Iniciar jogo**, o aplicativo retorna à tela inicial/fecha, sem iniciar o Pac-Man.
+- Portanto, o build #117 é tecnicamente bem-sucedido, mas **não corrigiu o defeito funcional**. A instrumentação adicionada foi validada estaticamente no artefato, porém ainda não foram obtidos os valores runtime.
+- Não marcar o problema como resolvido e não criar outra alteração especulativa no dispatcher/codegen.
+- Próxima ação: obter do aparelho o logcat da execução #117 filtrado pelas tags ReXCbRegister, ReXCbDispatchCaller, ReXCbObjectCaller, ReXCbDispatchEntry e ReXCallback53. Usar esses registros para identificar qual chamador aciona o dispatcher, o contexto PPC e os valores efetivos do slot 53.
+- Depois de analisar o log real, decidir a correção baseada em evidência. Não registrar stub para 0x82738920 nem remapear esse endereço para sub_827388A8.
