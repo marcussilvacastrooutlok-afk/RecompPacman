@@ -306,3 +306,12 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - O artefato diagnóstico #110 não incluiu o shard de código que contém `sub_8262C740`; a tabela DWARF do `libmain.so` aponta para `pacman_colors_recomp.276.cpp`. A inspeção do assembly nativo mostra que essa função contém várias gravações instrumentadas, mas ainda não permite atribuir o evento a uma instrução PPC específica sem o fonte desse shard e os registradores completos.
 - Alteração feita no workflow: commit `b069520265b93baba4866c32424be3135055a070`. O empacotamento de diagnósticos agora inclui shards que contenham `sub_8262C740`/`0x8262C748` e gera `callback53-writer-8262C740.txt` com contexto de código.
 - Próxima etapa: examinar o fonte de `sub_8262C740` no novo artefato, identificar a instrução PPC exata e correlacionar registradores de base/valor. Não alterar a tabela, não substituir `0x82738920` por stub e não registrar `0x82738920` como função até confirmar a semântica da instrução.
+
+
+## Análise do arquivo adicional diagnostico-pacman.zip — 2026-11-06
+
+- O usuário informou que também havia baixado e anexou `diagnostico-pacman.zip`; o arquivo foi aberto e seu índice interno foi verificado.
+- O ZIP contém 19 entradas, incluindo `caller-callback.txt`, `enderecos-trap.txt`, `pacman_colors_funcs.h`, `pacman_colors_init.cpp`, `pacman_colors_register.cpp`, `pacman_colors_pch.h`, os shards `pacman_colors_recomp.35.cpp`, `.64.cpp`, `.78.cpp`, `.82.cpp` e `.167.cpp`, além de `resumo.txt` e arquivos de build.
+- O pacote inclui parte dos dados já analisados para o APK #110 e serve como referência complementar. Ele **não contém** `pacman_colors_recomp.276.cpp`, que é o shard necessário para examinar a implementação PPC de `sub_8262C740), apontada pelo watchpoint como contexto da gravação do callback 53.
+- A alteração anterior no workflow, commit `b069520265b93baba4866c32424be3135055a070`, já amplia a coleta para incluir `sub_8262C740`/`0x8262C748` e deve incluir o shard ausente no próximo pacote de diagnóstico.
+- Nenhuma nova conclusão sobre a instrução exata que grava `0x82738920` foi obtida apenas com este ZIP. Manter a investigação pendente até inspecionar `pacman_colors_recomp.276.cpp`; não adicionar stub nem registrar `0x82738920` como função.
