@@ -1,6 +1,6 @@
 # CONTINUIDADE DO PROJETO — RecompPacman
 
-Última atualização: 2026-11-02
+Última atualização: 2026-11-06
 
 Este arquivo registra o estado técnico confirmado para que outro chat ou colaborador possa continuar sem repetir etapas. Leia antes de alterar o projeto.
 
@@ -280,3 +280,17 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Lint do commit anterior `c4adad12ef46e329d3662413dda802ef34fd94e5` terminou com sucesso. Build #110, run ID `41951049942`, para o commit `93606513...`, foi iniciado e está em andamento no momento deste registro.
 - Nenhum teste no telefone foi solicitado ainda. Aguardar o build mais recente; só entregar APK após confirmar compilação e artefatos.
 - A observação cobre os stores PPC gerados por essas macros. Se o log não mostrar gravações, será necessário investigar caminhos alternativos de cópia/memset ou stores diretos, sem concluir prematuramente que o slot não foi escrito.
+
+
+## Resultado do Workflow #110 — watchpoint PPC compilado (2026-11-06)
+
+- Workflow Android #110, run ID `41951049942`, commit `93606513c57a8f8957253a20eaa6cd4c2bf76cc0`: `completed/success`.
+- Todas as etapas passaram, incluindo geração do código, instrumentação da tabela de callbacks, watchpoint PPC, instrumentação de leitura e lista de inicialização, compilação ARM64, Gradle/SDL3 e publicação do APK.
+- Lint #112, run ID `41951049882`: `completed/success`.
+- Artefato diagnóstico `diagnostico-pacman`, ID `13384011106`; contém `pacman_colors_pch.h` e `watchpoint-pch.txt`. A inspeção confirmou os wrappers `REX_WATCHED_STORE`, stores U8/U16/U32/U64 e a delegação dos caminhos não-MMIO de `REX_MM_STORE`.
+- Artefato APK `pacman-android-apk`, ID `13383641910`; APK extraído: `pacman-android-arm64-debug.apk`, 137.467.192 bytes.
+- SHA-256 do APK #110: `061477bb839aaa93d09a55da686e0080cebd7358bbfa56cbbc4a64ef406cb3c8`.
+- Inspeção do APK confirmou `lib/arm64-v8a/libmain.so`, `libSDL3.so` e `librexruntime.so`. A busca de strings em `libmain.so` encontrou `ReXMemWatch` e `ReXCallback53`, comprovando que o watchpoint está no binário nativo.
+- Esta versão é um APK de diagnóstico: a compilação e a presença da instrumentação foram confirmadas, mas ainda não houve execução no aparelho e nenhuma correção funcional do jogo foi comprovada.
+- Próxima etapa: analisar o primeiro log do APK #110, procurando `ReXMemWatch BEFORE/AFTER` e correlacionar endereço, largura, valor e LR com `ReXCallback53`/ `ReXDispatch`. Se não houver watchpoint, investigar cópias/memsets ou stores diretos que não passam pelos macros instrumentados. Não adicionar stub para `0x82738920`.
+- APK #110 está pronto para o teste diagnóstico no Motorola; não é necessário repetir os testes dos APKs #99 ou #103.
