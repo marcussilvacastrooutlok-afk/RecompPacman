@@ -450,3 +450,20 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 3. Obter disassembly/instruções PPC brutas em `0x827388A8–0x82738930` e confirmar a sequência do caminho fatal.
 4. Identificar o significado do valor de bugcheck `30` no contexto Xbox/kernel a partir de evidência apropriada; não inferir o motivo específico apenas pelo número.
 5. Só depois decidir se existe defeito de registro/dispatch ou se o jogo está acionando corretamente um caminho de falha por uma condição anterior. Não alterar o runtime às cegas.
+
+
+## Dispatcher do callback 53 — fluxo de execução identificado (2026-11-07)
+
+- A inspeção do artefato #115 confirmou o corpo de `sub_8262C898`: percorre a tabela de callbacks, lê o target em cada registro, ignora target nulo e registros cujo byte de estado em `+8` não seja zero, carrega o argumento de `-4` em `r3`, move o target para `CTR` e executa `bctrl`.
+- Para o registro 53, o dispatcher chama o target `0x82738920` com `r3=0x82738AA0`. Isso confirma que a falha não é apenas a leitura de um ponteiro: o dispatcher efetivamente tenta invocá-lo como função PPC.
+- Foram encontrados dois chamadores diretos de `sub_8262C898` no código gerado:
+  - `sub_8256DE18`, no caminho de inicialização global, após chamadas a `sub_82458BA8`, `sub_8260B048` e `sub_8260BC70`; chama o dispatcher em `0x8256DE5C` e depois retorna.
+  - `sub_824497D8`, no caminho de inicialização de um objeto, após `sub_82449A00); chama o dispatcher em `0x824497FC`, depois inicializa o campo em `+3088` e marca o objeto em `+3860`.
+- A função `sub_83387708` registra explicitamente o target `0x82738920` e o argumento `0x82738AA0`, mas nenhum chamador direto foi encontrado nos shards preservados; o endereço consta na tabela de funções registradas, então pode ser invocado indiretamente.
+- Essa evidência aponta para o registro de uma entrada interna de função que o dispatcher chama como callback comum. Ainda precisamos observar em execução qual dos dois chamadores aciona o slot 53, o estado real do registro, o LR de entrada e o contexto de pilha/registradores antes do `bctrl`.
+- O helper fatal `sub_832CE868` chama `__imp__KeBugCheck` com código 30 e não apresenta retorno no código gerado. Isso sugere que o endereço `0x82738920` é a continuação após uma chamada que, no caminho analisado, não retorna normalmente. Não assumir que a execução desse endereço seja válida como callback comum.
+- Instrumentação adicional foi adicionada ao workflow para registrar a entrada de `sub_83387708`, `sub_8256DE18`, `sub_824497D8` e `sub_8262C898`, além de registrar `r1`, `r3`, `CTR`, LR e dados do slot 53 imediatamente antes do `bctrl`.
+- Commit do workflow de diagnóstico #116: `62d658add04e7452df8752640230b4b8aafb0d6f`.
+- Build #116, run ID `42391845264`: iniciado, job `128460869679` em andamento no primeiro acompanhamento.
+- Lint #130, run ID `42391845268`: iniciado, job `128460869663` em andamento no primeiro acompanhamento.
+- Não solicitar instalação do APK #116 antes de verificar se a instrumentação compilou. Se o build passar, este APK será necessário para um único teste direcionado: abrir o jogo e capturar logcat do crash, sem repetir testes anteriores desnecessariamente.
