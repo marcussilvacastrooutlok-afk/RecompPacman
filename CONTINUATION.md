@@ -342,3 +342,27 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Para corrigir isso, o workflow foi atualizado no commit `27574144e0768e822b0993de436fa609b4ec154a`: a instrumentação de entrada agora imprime `ctx.lr`, que contém o LR real do chamador no momento de entrada, antes que o prólogo PPC o copie para `r12` e a chamada auxiliar altere LR. A captura continua registrando contador e `r3-r6), com filtro para contador >= 50 ou target igual a `0x82738920`.
 - Próximo passo: analisar o Workflow #113 e seu log `ReXReg740`; correlacionar o registro de contador 53 com `caller_lr` correto e `target_r3`. Identificar o callsite e o fluxo que fornecem o endereço interno `0x82738920`; então corrigir a origem/semântica do registro, não criar stub.
 - O APK #112 é diagnóstico, não uma correção funcional. Não solicitar instalação/teste dele: o próximo APK #113 deve conter o LR corrigido para capturar o chamador de forma válida.
+
+
+## Resultado do APK #113 — chamador e origem literal do callback 53 (2026-11-07)
+
+- O usuário enviou `pacman-reg740-113.txt` e o pacote `diagnostico-pacman.zip`. O log contém três execuções (PIDs 20495, 20665 e 20765), todas com o mesmo resultado.
+- Em todas as execuções, as entradas 50–52 de `sub_8262C740` recebem `target_r3=0x8294D8D8`. Na entrada de índice 53, o log registra:
+  - `caller_lr=0x83387778`
+  - `target_r3=0x82738920`
+  - `arg_r4=0x82738AA0`
+  - `arg_r5=0`
+  - `arg_r6=0x833AB458`
+- O LR correto `0x83387778` mapeia para a instrução imediatamente após a chamada `bl 0x8262c740` dentro de `sub_83387708`, no shard `pacman_colors_recomp.100.cpp`. Isso identifica o chamador estático sem ambiguidade.
+- O trecho PPC de `sub_83387708` monta explicitamente os argumentos:
+  - `lis r8,-32140` seguido de `addi r3,r8,-30432`, resultando em `r3=0x82738920`.
+  - `lis r9,-32140` seguido de `addi r4,r9,-30048`, resultando em `r4=0x82738AA0`.
+  - `mr r6,r31` fornece `r6=0x833AB458` no registro 53.
+  - Em seguida chama `sub_8262C740`.
+- Portanto, o valor não é corrupção aleatória de memória nem uma sobrescrita posterior: o código recompilado de inicialização `sub_83387708` passa intencionalmente o endereço literal `0x82738920` como campo target do registro de callback 53.
+- No shard `pacman_colors_recomp.167.cpp`, `0x82738920` é exatamente o LR/continuação após `bl 0x8234d1f0` no ramo de falha de `sub_827388A8` (entrada real `0x827388A8`). O endereço está no meio dessa função, não tem entrada `DEFINE_REX_FUNC` nem registro `SetFunction`. `0x82738AA0`, por outro lado, é uma entrada de função separada.
+- O dispatcher `sub_8262C898` faz chamada indireta via `bctrl` ao target do registro. O registro contém `r6` em +4 e o dispatcher carrega esse campo em `r3` antes da chamada; no índice 53, o argumento passado em `r3` é `0x833AB458`.
+- Interpretação segura: está confirmado que o inicializador registra como callback um endereço que é uma continuação interna de outra função, não uma entrada de função registrada. Ainda precisamos verificar a semântica de chamada/captura de contexto do ReXRuntime e o propósito dos dois endereços pareados antes de decidir se a correção é no codegen (representar uma continuação válida), na geração de funções/limites de bloco, ou na rotina de inicialização. Não adicionar stub simples nem registrar cegamente `0x82738920`: o bloco de continuação não tem prólogo independente e pode depender do contexto/registradores da função original.
+- O pacote diagnóstico #113 contém os shards necessários, incluindo `pacman_colors_recomp.100.cpp`, `.167.cpp`, `.276.cpp`, além dos mapas de funções e inicialização. O log foi repetido três vezes e é consistente.
+- Workflow #113: run ID `42332380242`, commit `27574144e0768e822b0993de436fa609b4ec154a`, resultado `completed/success`. APK artifact ID `13559334624`; diagnóstico artifact ID `13559184987`.
+- Próxima etapa: inspecionar a implementação de `REX_CALL_INDIRECT_FUNC`/dispatcher e a semântica da rotina `sub_8234D1F0`; mapear referências e propósito de `sub_83387708`, `0x82738920` e `0x82738AA0`. Só então definir uma correção de recompilação com contexto correto. APK #113 é diagnóstico e o crash ainda não foi corrigido.
