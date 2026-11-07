@@ -315,3 +315,17 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - O pacote inclui parte dos dados já analisados para o APK #110 e serve como referência complementar. Ele **não contém** `pacman_colors_recomp.276.cpp`, que é o shard necessário para examinar a implementação PPC de `sub_8262C740), apontada pelo watchpoint como contexto da gravação do callback 53.
 - A alteração anterior no workflow, commit `b069520265b93baba4866c32424be3135055a070`, já amplia a coleta para incluir `sub_8262C740`/`0x8262C748` e deve incluir o shard ausente no próximo pacote de diagnóstico.
 - Nenhuma nova conclusão sobre a instrução exata que grava `0x82738920` foi obtida apenas com este ZIP. Manter a investigação pendente até inspecionar `pacman_colors_recomp.276.cpp`; não adicionar stub nem registrar `0x82738920` como função.
+
+
+## Workflow #111 — shard 276 recuperado e rotina de registro identificada (2026-11-06)
+
+- Workflow Android #111, run ID `42320045436`, commit `b069520265b93baba4866c32424be3135055a070`: `completed/success`. Todas as etapas de geração, instrumentação, compilação ARM64, Gradle/SDL3 e publicação passaram.
+- Artefato diagnóstico `diagnostico-pacman`, ID `13554755960`; artefato APK `pacman-android-apk`, ID `13554163465`. O pacote diagnóstico foi baixado e inspecionado.
+- O pacote agora contém `pacman_colors_recomp.276.cpp` e `callback53-writer-8262C740.txt`, que estavam ausentes no pacote #110.
+- No shard 276, a função `sub_8262C740` foi localizada. Ela lê o contador em `0x83482808`, calcula o deslocamento `contador * 20` e grava os campos de um registro de callback. A instrução `stwx r3,r7,r8` grava o valor de `r3` no campo de destino do registro; os demais stores gravam argumentos e estado.
+- O endereço calculado para o campo de destino do índice 53 é `0x834808C8 + 8 + (53 * 20) = 0x83480CF4`, exatamente o endereço observado pelo watchpoint no APK #110. Isso identifica `sub_8262C740` como o caminho de registro que grava o target do callback 53; a investigação anterior monitorava apenas `sub_8262C828` e por isso não capturou esse caminho.
+- O valor gravado vem de `r3`. A função salva o LR original do chamador em `r12` antes de chamar `__savegprlr_29`; depois essa rotina altera `ctx.lr` para `0x8262C748`. Portanto, o LR visto pelo watchpoint identifica o retorno interno da chamada auxiliar, não o chamador que forneceu o target.
+- Foram encontrados 28 callsites estáticos para `sub_8262C740` nos shards presentes. Os exemplos examinados passam endereços diferentes em `r3`; ainda não foi identificado qual chamada, ou caminho dinâmico, fornece especificamente `0x82738920`.
+- Novo passo preparado no workflow: registrar na entrada de `sub_8262C740` o contador, LR original salvo em `r12` e argumentos `r3-r6`, com filtro para contadores a partir de 50 ou target igual a `0x82738920`. Isso deve revelar o chamador real e o valor entregue em `r3` quando o índice 53 é preenchido.
+- Commit da instrumentação de entrada: `7564d0b2ab8ff7f9dcc37f84b1ae07dd7034bf96`. Aguardando o próximo workflow para obter o log `ReXReg740`.
+- Não adicionar stub nem registrar `0x82738920` como função. Não solicitar teste do APK #111: ele só incluiu o shard ausente para análise e não corrige o jogo.
