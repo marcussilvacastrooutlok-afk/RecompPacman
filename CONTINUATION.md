@@ -366,3 +366,13 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - O pacote diagnóstico #113 contém os shards necessários, incluindo `pacman_colors_recomp.100.cpp`, `.167.cpp`, `.276.cpp`, além dos mapas de funções e inicialização. O log foi repetido três vezes e é consistente.
 - Workflow #113: run ID `42332380242`, commit `27574144e0768e822b0993de436fa609b4ec154a`, resultado `completed/success`. APK artifact ID `13559334624`; diagnóstico artifact ID `13559184987`.
 - Próxima etapa: inspecionar a implementação de `REX_CALL_INDIRECT_FUNC`/dispatcher e a semântica da rotina `sub_8234D1F0`; mapear referências e propósito de `sub_83387708`, `0x82738920` e `0x82738AA0`. Só então definir uma correção de recompilação com contexto correto. APK #113 é diagnóstico e o crash ainda não foi corrigido.
+
+
+## Semântica confirmada do despacho indireto — continuação da análise #113 (2026-11-07)
+
+- O header gerado `pacman_colors_pch.h` do artefato #113 contém a macro `REX_CALL_INDIRECT_FUNC`. Ela procura o ponteiro de função no dispatch table do módulo; se não estiver registrado, chama `rex::runtime::ResolveIndirectFunction`; em seguida executa diretamente `rex_indirect_func_(ctx, base)`.
+- A macro não cria um novo `PPCContext`, não restaura automaticamente os registradores não voláteis e não reconstrói a pilha da função de origem. A função chamada recebe o mesmo contexto que o dispatcher está usando.
+- Em `sub_8262C898`, o dispatcher usa `r31` como ponteiro para o registro e carrega `r3` do campo +4 antes do `bctrl`. Portanto, uma chamada direta para o bloco interno `0x82738920` não equivale a reentrar normalmente em `sub_827388A8`: o bloco não executa o prólogo que inicializa/salva `r31` e a pilha.
+- Isso reforça que não é seguro resolver o crash simplesmente adicionando `SetFunction(0x82738920, ...)` ou criando um stub vazio. A solução precisa preservar a semântica do callback e o estado PPC esperado, ou corrigir a geração/representação do destino no caminho de inicialização.
+- O artefato #113 contém declarações e registros para `sub_82738AA0`, mas não inclui a definição do seu corpo entre os shards coletados; o corpo de `sub_8234D1F0` também não está entre os arquivos-fonte selecionados. Não inferir o papel desses dois endereços nem se `sub_8234D1F0` retorna sem coletar os respectivos corpos ou analisar a fonte completa.
+- Próxima ação de análise: localizar as definições completas de `sub_82738AA0` e `sub_8234D1F0` no codegen completo e rastrear a origem de `sub_83387708` (quem chama essa rotina e em que fase). Em paralelo, revisar como o gerador determina limites de função e se existe suporte a callbacks/continuações que apontam para blocos internos. Nenhuma correção funcional foi aplicada ainda.
