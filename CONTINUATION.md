@@ -414,3 +414,15 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 2. Obter/inspecionar as instruções PPC brutas em `0x82738908–0x82738930`, principalmente a sequência após o `bl 0x8234D1F0`, para determinar se há código executável de continuação e qual contexto ele exige.
 3. Rastrear a função de limpeza `sub_82738AA0` e o registrador `sub_83387708` até o chamador/fase de inicialização, para identificar o contrato do registro.
 4. Só então decidir se a correção pertence ao codegen (suporte a continuations/callbacks internos) ou ao caminho de inicialização. Não adicionar stub, não mapear `0x82738920` para `sub_827388A8` e não alterar o runtime às cegas.
+
+
+## Próxima coleta — workflow #115 (2026-11-07)
+
+- Após analisar o artefato #114, o workflow foi ajustado para também preservar o shard que contém `sub_832CE868`:
+  - relatório de contexto agora procura a definição e referências de `sub_832CE868`;
+  - lista de shards preservados inclui `sub_832CE868` e `832CE868`.
+- Commit do workflow: `cd5cc44f8d11ffc9f76ebca67c18918cdea03eb6`.
+- Build Android #115, run ID `42382886957`: iniciado; job `128434051006` estava `in_progress` no primeiro acompanhamento.
+- Lint #127, run ID `42382886938`: iniciado; job `128434051122` estava `in_progress`.
+- Atualização deste documento após o resultado #114: commit `2f12f761e24bd7b5380c504a07564a1117fcbc51`.
+- Próximo passo: acompanhar #115 e #127. Se o build passar, verificar se o pacote agora contém o corpo de `sub_832CE868`; não solicitar teste no telefone, pois esta continua sendo uma coleta diagnóstica.
