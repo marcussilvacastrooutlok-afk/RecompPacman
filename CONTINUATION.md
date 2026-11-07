@@ -426,3 +426,27 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Lint #127, run ID `42382886938`: iniciado; job `128434051122` estava `in_progress`.
 - Atualização deste documento após o resultado #114: commit `2f12f761e24bd7b5380c504a07564a1117fcbc51`.
 - Próximo passo: acompanhar #115 e #127. Se o build passar, verificar se o pacote agora contém o corpo de `sub_832CE868`; não solicitar teste no telefone, pois esta continua sendo uma coleta diagnóstica.
+
+
+## Resultado do Workflow #115 — helper fatal identificado (2026-11-07)
+
+- Workflow Android #115, run ID `42382886957`, commit `cd5cc44f8d11ffc9f76ebca67c18918cdea03eb6`: `completed/success`. Todas as etapas, incluindo geração do código, compilação ARM64, empacotamento SDL3 e publicação do APK, passaram.
+- Artefato APK: `pacman-android-apk`, ID `13579988420`.
+- Artefato diagnóstico: `diagnostico-pacman`, ID `13579768856`; baixado e inspecionado. O shard `pacman_colors_recomp.110.cpp` contém a definição completa de `sub_832CE868`.
+- Corpo confirmado de `sub_832CE868`:
+  1. cria seu frame de pilha;
+  2. chama `sub_832CE7C8` com `r3=2`, `r4=0xC0000417` e `r5=1`;
+  3. configura `r3=30`;
+  4. chama `__imp__KeBugCheck`.
+  Não há epílogo nem retorno após `KeBugCheck`.
+- Isso confirma que a cadeia `sub_827388A8 -> sub_8234D1F0 -> sub_832CE868 -> KeBugCheck(30)` é um caminho fatal, não uma continuação de retorno normal. Assim, o endereço `0x82738920` é o LR/endereço de retorno após a chamada para `sub_8234D1F0`, mas o caminho chamado termina em bugcheck. Não devemos tratar `0x82738920` como uma função comum nem inventar um stub para fazê-la retornar.
+- A conclusão ainda não explica por que `sub_83387708` registra esse LR como target no slot 53. O próximo ponto é entender o contrato do registro e em quais circunstâncias o dispatcher chama o target. A hipótese a testar é que o registro representa um handler/callback de falha cuja invocação leva deliberadamente ao bugcheck; outra possibilidade é que o registrador ou a interpretação do tipo de callback estejam incorretos.
+- Não há correção funcional implementada neste build. O APK #115 é apenas diagnóstico; não solicitar instalação/teste no telefone.
+
+### Próximas investigações
+
+1. Inspecionar `sub_83387708` integralmente e todos os seus chamadores para identificar a fase e o propósito do registro.
+2. Inspecionar `sub_8262C740`, `sub_8262C898` e o consumidor do slot 53, incluindo condições, ordem dos argumentos e contexto PPC usado na invocação.
+3. Obter disassembly/instruções PPC brutas em `0x827388A8–0x82738930` e confirmar a sequência do caminho fatal.
+4. Identificar o significado do valor de bugcheck `30` no contexto Xbox/kernel a partir de evidência apropriada; não inferir o motivo específico apenas pelo número.
+5. Só depois decidir se existe defeito de registro/dispatch ou se o jogo está acionando corretamente um caminho de falha por uma condição anterior. Não alterar o runtime às cegas.
