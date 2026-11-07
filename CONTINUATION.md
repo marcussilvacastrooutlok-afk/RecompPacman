@@ -389,3 +389,28 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - O pacote #113 não contém os corpos completos de `sub_8234D1F0` e `sub_82738AA0`; esses corpos são necessários para interpretar a chamada e o par de endereços do registro 53.
 - Commit do workflow para ampliar a coleta: `eb7c4abf1c915d2da81a32f204cd4f042eec9a70`. O próximo artefato diagnóstico deve incluir shards que contenham `sub_8234D1F0`, `sub_82738AA0`, `sub_827388A8` e `sub_83387708`, além de `callback53-continuations.txt`.
 - Próxima etapa: aguardar o build acionado pelo commit de coleta; examinar os corpos completos das duas funções e a instrução/código em torno de `0x82738920`. Só depois escolher entre corrigir a origem do callback ou acrescentar suporte correto a continuations internas. APK #113 continua sendo diagnóstico; nenhuma correção funcional foi aplicada.
+
+
+## Resultado do Workflow #114 — corpos das funções recuperados (2026-11-07)
+
+- Workflow Android #114, run ID `42376075002`, commit `eb7c4abf1c915d2da81a32f204cd4f042eec9a70`: `completed/success`. Todas as etapas de geração, instrumentação, compilação ARM64, Gradle/SDL3 e publicação passaram.
+- Artefato APK: `pacman-android-apk`, ID `13576957743`.
+- Artefato diagnóstico: `diagnostico-pacman`, ID `13576803309`; ZIP baixado e inspecionado. Inclui os shards `.100.cpp`, `.167.cpp`, `.181.cpp`, `.34.cpp`, além de `callback53-continuations.txt`, mapas e relatórios.
+- Em `sub_827388A8` (entrada `0x827388A8`), o caminho de sucesso aloca 44 bytes e inicializa os campos do nó. No caminho de falha, constrói na pilha um pequeno objeto/descritor (campos em `r1+80` e `r1+84`) e chama `sub_8234D1F0` com `r3=r1+80`. O LR dessa chamada é exatamente `0x82738920`.
+- O corpo completo de `sub_8234D1F0` foi localizado no shard `pacman_colors_recomp.181.cpp`. Ele:
+  1. guarda o argumento em `r31);
+  2. lê um ponteiro global e, se não nulo, chama-o indiretamente;
+  3. lê o objeto apontado pelo primeiro campo de `r31`, obtém o método no offset +8 da vtable e chama-o indiretamente;
+  4. zera `r3-r7` e chama `sub_832CE868`.
+- O C++ gerado para `sub_8234D1F0` termina imediatamente após essa chamada a `sub_832CE868`, sem epílogo ou retorno visível. Isso é compatível com uma rotina terminal (por exemplo, caminho de exceção/falha), mas **não prova** que `sub_832CE868` seja noreturn: a definição desse helper não veio no ZIP. A declaração e o registro do símbolo aparecem nos arquivos agregados, mas não o corpo.
+- O corpo completo de `sub_82738AA0` foi localizado no shard `pacman_colors_recomp.34.cpp`. Ele lê dois ponteiros do objeto recebido; se o primeiro for não nulo, chama `sub_82457C28` com os campos internos; depois chama `sub_82457C28` com o segundo ponteiro; finalmente zera o primeiro campo e retorna. Portanto, é uma rotina de limpeza/liberação de dois recursos, mas o tipo exato dos recursos ainda não está identificado.
+- A função `sub_83387708` confirma que os valores `0x82738920` e `0x82738AA0` são montados explicitamente e passados ao registrador `sub_8262C740`. O primeiro é o endereço de retorno/continuação após a chamada de falha em `sub_827388A8`; o segundo é uma entrada de função independente que executa a limpeza descrita acima.
+- A nova evidência estreita a hipótese: o callback parece combinar um endereço de continuação de caminho de falha com uma rotina de limpeza, mas ainda não se sabe se isso representa um callback/continuation válido que o codegen não modelou, ou se a rotina de inicialização está registrando um destino inadequado. Não concluir que o helper é noreturn sem examinar `sub_832CE868` e o código PPC bruto na região `0x82738920`.
+- O artefato #114 é diagnóstico. Não pedir instalação/teste no telefone: ainda não existe correção funcional demonstrada.
+
+### Próxima etapa após #114
+
+1. Ampliar a coleta para preservar a definição completa de `sub_832CE868` (o shard que a contém), e gerar um relatório específico sobre seus chamadores e comportamento.
+2. Obter/inspecionar as instruções PPC brutas em `0x82738908–0x82738930`, principalmente a sequência após o `bl 0x8234D1F0`, para determinar se há código executável de continuação e qual contexto ele exige.
+3. Rastrear a função de limpeza `sub_82738AA0` e o registrador `sub_83387708` até o chamador/fase de inicialização, para identificar o contrato do registro.
+4. Só então decidir se a correção pertence ao codegen (suporte a continuations/callbacks internos) ou ao caminho de inicialização. Não adicionar stub, não mapear `0x82738920` para `sub_827388A8` e não alterar o runtime às cegas.
