@@ -31,7 +31,7 @@ jobs:
       - name: Instalar dependencias
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget ca-certificates python3-pil
+          sudo apt-get install -y wget ca-certificates python3-pil python3-tomli
 
           wget https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
@@ -144,7 +144,7 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import tomllib
+          import tomli as tomllib
 
           manifest = Path("pacman_project/pacman_colors_manifest.toml")
           source = manifest.read_text()
