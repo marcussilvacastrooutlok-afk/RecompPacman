@@ -595,3 +595,24 @@ Status: referência analisada; nenhuma fonte do Black foi copiada para o Pac-Man
 - Esse diagnóstico é executado durante a análise do codegen, antes da etapa GapFill, e não exige instrumentar a memória guest em tempo de execução. Assim, a próxima coleta mais econômica é preservar o log da etapa de codegen de uma execução de workflow, sem precisar gerar/instalar um novo APK para testar o jogo.
 - O diagnóstico também permite separar três cenários: (1) bytes PPC válidos em 0x82738920, mas sem entrada no grafo — reforça a lacuna de descoberta de ponteiro; (2) endereço sem instrução decodificada — investigar região executável/decodificação/limite de seção; (3) endereço já contido em outro bloco/função — investigar classificação e ownership no grafo.
 - Próxima etapa operacional: coletar a saída `[INDIRECT-DIAG]` do codegen atual e só então decidir se a regra direcionada para o argumento r3 de `sub_8262C740` deve registrar 0x82738920 como função. Não iniciar teste funcional no telefone nesta etapa.
+
+
+## Diagnóstico PPC recuperado do log da compilação #117 — confirmação de código no callback 53 (2026-11-08)
+
+- O log completo do job `build` da execução #117 (run ID `42411843613`, job ID `128521458816`) foi consultado diretamente no GitHub Actions.
+- O bloco `[INDIRECT-DIAG]` estava de fato presente no codegen e foi executado. Resultado:
+  `target=0x82738920 exact_entry=false has_containing_function=false owner_base=0x00000000`.
+  Logo, o alvo não era uma entrada exata nem estava contido em qualquer função reconhecida pelo grafo.
+- O decoder leu palavras PPC reais do XEX em torno do alvo:
+  - `0x82738918: 0x91410050`
+  - `0x8273891C: 0x4BC148D5`
+  - `0x82738920: 0x81630000`
+  - `0x82738924: 0x2B0B0000`
+  - `0x82738928: 0x4C9A0020`
+- As três instruções a partir de 0x82738920 são decodificadas como instruções PPC válidas (não padding/bytes não decodificados): carregamento de palavra a partir de r3, comparação imediata e branch condicional via LR. Esse padrão é compatível com o início de uma pequena rotina/thunk que recebe um objeto em r3 e pode retornar condicionalmente. O padrão lembra os outros callbacks de limpeza vistos nos shards, embora ainda não prove a semântica exata nem mostre o restante do corpo.
+- Isso descarta a hipótese simples de que 0x82738920 seja apenas endereço sem código. A explicação agora mais forte é: existe código PPC executável nessa entrada, mas o grafo do codegen não a registrou porque o endereço aparece como ponteiro de dados passado ao registrador de callback, e não como alvo de uma chamada direta/vtable reconhecida.
+- Foi inspecionada a configuração do codegen: `RecompilerConfig` suporta entradas manuais em `[functions]`; no manifesto, o bloco correspondente ao executável principal é `[entrypoint]`, então a configuração correta é `[entrypoint.functions."82738920"]`. A entrada pode ficar sem `size`/`end`, deixando o fluxo de descoberta definir os blocos.
+- Alteração aplicada em `.github/workflows/recompilar-pacman.yml`: após `rexglue init`, o workflow valida o manifesto TOML e adiciona a entrada manual `sub_82738920` em `[entrypoint.functions]`. Isso é direcionado a este endereço confirmado e evita reativar a varredura genérica de ponteiros, que foi desativada por falsos positivos.
+- Commit da alteração: `c3b313b40afb289150f2d316b5dc358e9d3cca5b`.
+- Workflow de build disparado automaticamente pelo push: run ID `42512028942`, URL https://github.com/marcussilvacastrooutlok-afk/RecompPacman/actions/runs/42512028942. No momento do registro, estava em fila.
+- Critério para avaliar o resultado: o codegen deve mostrar `exact_entry=true` para 0x82738920 e produzir `DEFINE_REX_FUNC(sub_82738920)`/registro SetFunction correspondente. Se a análise falhar por tamanho/limite ou instruções, rever a configuração com base no log; não presumir sucesso só porque o workflow compila. Ainda não solicitar instalação/teste no telefone até confirmar o código gerado e o APK.
