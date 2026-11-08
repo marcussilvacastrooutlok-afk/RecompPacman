@@ -140,6 +140,41 @@ jobs:
             --game-root "$GITHUB_WORKSPACE" \
             --project-root "$GITHUB_WORKSPACE/pacman_project"
 
+      - name: Registrar entrypoint PPC confirmado do callback Pac-Man
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import tomllib
+
+          manifest = Path("pacman_project/pacman_colors_manifest.toml")
+          source = manifest.read_text()
+          data = tomllib.loads(source)
+          if "entrypoint" not in data:
+              raise SystemExit("Manifesto sem tabela [entrypoint]")
+          functions = data["entrypoint"].get("functions", {})
+          address = "82738920"
+          if address in functions or "0x" + address in functions:
+              raise SystemExit("Entrypoint 0x82738920 já existe no manifesto; não duplicar")
+
+          # O entrypoint é adicionado como configuração manual sem tamanho fixo:
+          # o codegen descobre os blocos e o limite pelo fluxo PPC/PDATA.
+          block = '\n[entrypoint.functions."82738920"]\nname = "sub_82738920"\n'
+          modules_marker = "\n[[modules]]"
+          position = source.find(modules_marker)
+          if position < 0:
+              source = source.rstrip() + block
+          else:
+              source = source[:position] + block + source[position:]
+
+          # Validar a sintaxe TOML e a posição lógica antes de salvar.
+          parsed = tomllib.loads(source)
+          entry = parsed["entrypoint"]["functions"].get(address)
+          if not isinstance(entry, dict) or entry.get("name") != "sub_82738920":
+              raise SystemExit("Não foi possível validar entrypoint.functions.82738920")
+          manifest.write_text(source)
+          print("Entrypoint PPC confirmado registrado: 0x82738920 (sub_82738920)")
+          PY
+
       - name: Verificar arquivos gerados
         run: |
           echo "=== Arquivos do projeto ==="
